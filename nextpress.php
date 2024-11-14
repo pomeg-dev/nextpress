@@ -68,6 +68,7 @@ class Nextpress
     private function _init()
     {
         NextpressApiRouter::_init();
+        NextpressApiSettings::_init();
         NextpressApiPosts::_init();
         NextpressApiMenus::_init();
         NextpressApiTheme::_init();
