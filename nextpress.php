@@ -52,6 +52,8 @@ require_once plugin_dir_path(__FILE__) . 'api/NextpressApiTemplates.php';
  * Extensions
  *----------------------------------------------------------------------------*/
 require_once plugin_dir_path(__FILE__) . 'extensions/acf.php';
+require_once plugin_dir_path(__FILE__) . 'extensions/yoast.php';
+require_once plugin_dir_path(__FILE__) . 'extensions/gravity-forms.php';
 
 class Nextpress
 {

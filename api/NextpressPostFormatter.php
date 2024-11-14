@@ -36,8 +36,7 @@ class NextpressPostFormatter
         $formatted_post = self::include_post_path($formatted_post);
         $formatted_post = self::return_post_revision_for_preview($formatted_post);
 
-
-        return $formatted_post;
+        return apply_filters('np_post_object', $formatted_post);
     }
 
     private static function get_template_content($post)

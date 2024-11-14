@@ -20,7 +20,7 @@ class NextPressAcfExtension
     public function include_acf_data($post)
     {
         if (!function_exists('get_fields')) return $post;
-        $post->acf_data = get_fields(is_object($post) ? $post->ID : $post['id']);
+        $post['acf_data'] = get_fields(is_object($post) ? $post->ID : $post['id']);
         return $post;
     }
 
