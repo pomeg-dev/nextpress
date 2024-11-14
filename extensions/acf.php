@@ -13,14 +13,14 @@ class NextPressAcfExtension
     {
         add_filter("np_post_object", array($this, "include_acf_data"));
         add_filter("np_block_data", array($this, "reformat_block_data"), 10, 2);
-        // add_filter("np_block_data", array($this, "replace_nav_id"), 10, 2);
+        add_filter("np_block_data", array($this, "replace_nav_id"), 10, 2);
         add_action('rest_api_init', array($this, 'featured_media_posts_api'));
     }
 
     public function include_acf_data($post)
     {
         if (!function_exists('get_fields')) return $post;
-        $post->acf_data = get_fields($post->ID);
+        $post->acf_data = get_fields(is_object($post) ? $post->ID : $post['id']);
         return $post;
     }
 
@@ -45,10 +45,21 @@ class NextPressAcfExtension
 
 
     // //if you spot a value of {{nav_id-[id]}} in the block data, replace it with the actual menu object
-    // public function replace_nav_id($block_data)
-    // {
-    //    if (!isset($block_data['data'])) return;
-    // }
+    public function replace_nav_id($block_data)
+    {
+       // Stringiy block data and check if nav-id exists.
+       $block_string = wp_json_encode($block_data);
+       $re = '/{{nav_id-(\d.)}}/m';
+       preg_match_all($re, $block_string, $matches, PREG_SET_ORDER, 0);
+       if ($matches) {
+           foreach ($matches as $match) {
+               $nav_id = $match[1];
+               $block_data['menus'][$nav_id] = wp_get_nav_menu_items($nav_id);
+           }
+       }
+       
+       return $block_data;
+    }
 
 
     //     function get_menus()

@@ -63,7 +63,7 @@ function build_acf_fields($fields, $builder)
     foreach ($fields as $field) {
         $field_type = $field['type'];
         $field_args = [
-            'label' => $field['label'] ?? ucfirst($field['id']),
+            'label' => $field['label'] ?? ucfirst(str_replace('_', ' ', $field['id'])),
             'name' => $field['id'],
             'instructions' => $field['instructions'] ?? '',
             'allowed_types' => $field['allowed_types'] ?? '',
@@ -174,6 +174,21 @@ function build_acf_fields($fields, $builder)
                 $field_args['choices'] = get_menus();
                 $builder->addSelect($field['id'], $field_args);
                 break;
+            case 'theme':
+                $field_args['choices'] = get_np_themes();
+                $field_args['default_value'] = 'default-blocks';
+                $builder->addSelect($field['id'], $field_args);
+                break;
+            case 'gravity_form':
+                $field_args['choices'] = get_gravity_forms();
+                $builder->addSelect($field['id'], $field_args);
+                break;
+            case 'tab':
+                $builder->addTab($field['id'], $field_args);
+                break;
+            case 'accordion':
+                $builder->addAccordion($field['id'], $field_args);
+                break;
             default:
                 // For any custom or unhandled field types
                 $builder->addField($field_type, $field['id'], $field_args);
@@ -230,16 +245,48 @@ function map_field_type($api_type)
 
 function get_menus()
 {
+    $menu_choices = array(null => __('Please select menu', 'nextpress'));
     $menus = wp_get_nav_menus();
-    $menu_choices = array();  // Adding an empty option
-    //need to return ["$id" => "$name", ...]
-    foreach ($menus as $menu) {
-        $id = $menu->term_id;
-        $menu_choices["{{nav_id-$id}}"] = $menu->name;
+    if (!is_wp_error($menus)) {
+        foreach ($menus as $menu) {
+            $id = $menu->term_id;
+            $menu_choices["{{nav_id-$id}}"] = $menu->name;
+        }
+    } else {
+        $menus = get_nav_menu_locations();
+        foreach ($menus as $location => $id) {
+            $menu_choices["{{nav_id-$id}}"] = ucfirst(str_replace('_', ' ', $location));
+        }
     }
     return $menu_choices;
 }
 
+function get_np_themes()
+{
+    $themes = get_field('blocks_theme', 'option');
+    if ($themes && is_array($themes)) {
+        foreach ( $themes as $theme ) {
+          $choices[ $theme ] = $theme;
+        }
+    }
+    return $choices;
+}
+
+function get_gravity_forms()
+{
+    if ( ! class_exists( 'GFAPI' ) ) {
+        // No Gravity Form API class available. The plugin probably isn't active.
+        return $field;
+    }
+
+    $forms = GFAPI::get_forms(true);
+    $choices[null] = __('Please select form', 'nextpress');
+    foreach ( $forms as $form ) {
+        $choices['form_id_' . $form['id']] = $form['title'];
+    }
+
+    return $choices;
+}
 
 // Main function to register blocks and fields
 function register_nextpress_blocks()
@@ -279,6 +326,7 @@ function register_nextpress_blocks()
                 'category'          => $theme,
                 'icon'              => get_icon($block_name),
                 'keywords'          => [$block_name, 'custom'],
+                'supports'          => ['jsx' => true],
             ]);
         }
     });
@@ -390,7 +438,15 @@ function get_icon($block_name)
 function render_nextpress_block($block, $content = '', $is_preview = false, $post_id = 0)
 {
     $block_name = str_replace('acf/', '', $block['name']);
-?>
+    $block_template = [
+        [
+            'core/paragraph',
+            [
+                'placeholder' => __( 'Type / to choose a block', 'luna' ),
+            ],
+        ],
+    ];
+    ?>
     <div class="nextpress-block" style="border: 2px solid #007cba; padding: 20px; margin: 10px 0; background-color: #f0f0f1;">
         <h3 style="margin-top: 0; color: #007cba;">Block: <?php echo esc_html(ucfirst(str_replace('-', ' ', $block_name))); ?></h3>
         <?php
@@ -400,9 +456,43 @@ function render_nextpress_block($block, $content = '', $is_preview = false, $pos
         //     echo '<p><strong>' . esc_html($key) . ':</strong> ' . esc_html($value) . '</p>';
         // }
         ?>
+        <?php
+        if (get_field( 'inner_blocks') ) :
+            ?>
+            <InnerBlocks
+                template="<?php echo esc_attr( wp_json_encode( $block_template ) ); ?>"
+            />
+            <?php
+        endif;
+        ?>
     </div>
 <?php
 }
 
 // Initialize the block registration
 add_action('after_setup_theme', 'register_nextpress_blocks');
+
+// Populate post_type_rest field.
+add_filter('acf/load_field/name=post_type_rest', function ($field) {
+    $post_types = get_post_types( array( 'public'   => true ), 'objects' );
+    foreach ($post_types as $post_type) {
+        if ($post_type->name === 'page' || $post_type->name === 'attachment') {
+            continue;
+        }
+        $field['choices'][$post_type->rest_base] = $post_type->label;
+    }
+
+    // return the field
+    return $field;
+});
+
+// Populate taxonomy field.
+add_filter('acf/load_field/name=taxonomy_rest', function ($field) {
+    $taxonomies = get_taxonomies( array( 'public'   => true ), 'objects' );
+    foreach ($taxonomies as $tax) {
+        $field['choices'][$tax->rest_base] = $tax->label;
+    }
+
+    // return the field
+    return $field;
+});

@@ -14,6 +14,9 @@ class NextpressApiPosts
     public static function _init()
     {
         add_action('rest_api_init', array('NextpressApiPosts', 'register_routes'));
+
+        // Modify archive block rest requests.
+        add_action('rest_api_init', array('NextpressApiPosts', 'rest_archive_mods'));
     }
 
     public static function register_routes()
@@ -186,5 +189,59 @@ class NextpressApiPosts
             ),
             // Add more parameters as needed
         );
+    }
+
+    public static function rest_archive_mods()
+    {
+      foreach ( get_post_types( array( 'public' => true ), 'names' ) as $post_type ) {
+        add_filter('rest_' . $post_type . '_query', array('NextpressApiPosts', 'rest_filter_by_custom_taxonomy'), 10, 2);
+        add_filter('rest_prepare_' . $post_type, array('NextpressApiPosts', 'rest_modify_post_object'), 10, 3);
+      }
+    }
+
+    public static function rest_filter_by_custom_taxonomy( $args, $request )
+    {
+        // Gather requested filter terms.
+        $params = $request->get_params();
+        $filters = [];
+        foreach ( $params as $key => $value ) {
+          if ( strpos( $key, 'filter_' ) !== false ) {
+            $rest_tax = str_replace( 'filter_', '', $key );
+            $filters[ $rest_tax ] = [ 'terms' => $value ];
+          }
+        }
+
+        if ( ! $filters ) {
+          return $args;
+        }
+
+        // Get proper slugs for taxonomies.
+        $taxonomies = get_taxonomies( array( 'public'   => true ), 'objects' );
+        foreach ( $taxonomies as $key => $tax ) {
+          if ( isset( $filters[ $tax->rest_base ] ) ) {
+            $filters[ $tax->rest_base ]['slug'] = $key;
+          }
+        }
+
+        // Set tax query for each filter.
+        foreach ( $filters as $rest_tax => $tax ) {
+          $args['tax_query'][] = [
+            'taxonomy' => sanitize_text_field( $tax['slug'] ),
+            'field'    => 'slug',
+            'terms'    => sanitize_text_field( $tax['terms'] ),
+          ];
+        }
+
+        return $args;
+    }
+
+    public static function rest_modify_post_object( $response, $post, $request )
+    {
+        if ( ! function_exists( 'get_fields' ) ) return $response;
+    
+        if ( isset( $post ) && isset( $request['is_archive'] ) && $request['is_archive'] ) {
+            $response->data = NextpressPostFormatter::format_post($post, $params['include_content']);
+        }
+        return $response;
     }
 }
