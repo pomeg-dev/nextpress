@@ -41,6 +41,7 @@ require_once plugin_dir_path(__FILE__) . 'admin/deploy.php';
  *----------------------------------------------------------------------------*/
 require_once plugin_dir_path(__FILE__) . 'api/helpers.php';
 require_once plugin_dir_path(__FILE__) . 'api/NextpressApiRouter.php';
+require_once plugin_dir_path(__FILE__) . 'api/NextpressApiSettings.php';
 require_once plugin_dir_path(__FILE__) . 'api/NextpressApiPosts.php';
 require_once plugin_dir_path(__FILE__) . 'api/NextpressApiTheme.php';
 require_once plugin_dir_path(__FILE__) . 'api/NextpressApiMenus.php';
