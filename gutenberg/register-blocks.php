@@ -304,23 +304,24 @@ function register_nextpress_blocks()
         }
 
         foreach ($blocks as $block) {
-            $block_builder = new FieldsBuilder($block['blockName']);
+            $block_name = $block['id']; //in format {theme}--{name} (double hyphen deliberate)
+            $theme = explode('--', $block_name)[0];
+            $block_title = ucwords(str_replace('-', ' ', $block['blockName']));
+            $block_title .= ' (' . ucwords(str_replace('-', ' ', $theme)) . ')';
+
+            $block_builder = new FieldsBuilder($theme . '-' . $block['blockName']);
             build_acf_fields($block['fields'], $block_builder);
 
-            $block_name = $block['id']; //in format {theme}--{name} (double hyphen deliberate)
-
-            $global = new FieldsBuilder($block['blockName'] . '-block');
+            $global = new FieldsBuilder($theme . '-' . $block['blockName'] . '-block');
             $global
                 ->addFields($block_builder)
                 ->setLocation('block', '==', 'acf/' . $block_name);
-
-            $theme = explode('--', $block_name)[0];
 
             acf_add_local_field_group($global->build());
 
             acf_register_block_type([
                 'name'              => $block_name,
-                'title'             => ucfirst(str_replace('-', ' ', $block['blockName'])),
+                'title'             => $block_title,
                 'description'       => 'A custom ' . $block['blockName'] . ' block.',
                 'render_callback'   => 'render_nextpress_block',
                 'category'          => $theme,
