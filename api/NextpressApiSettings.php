@@ -41,8 +41,10 @@ class NextpressApiSettings
     public static function add_acf_to_ng_settings($settings)
     {
         if (!function_exists('get_fields')) return;
-        $settings = array_merge($settings, get_fields('options'));
-        return $settings;
+        if (get_fields('options')) {
+            $settings = array_merge($settings, get_fields('options'));
+            return $settings;
+        }
     }
 
     public static function add_yoast_base_settings_to_ng_settings($settings)
