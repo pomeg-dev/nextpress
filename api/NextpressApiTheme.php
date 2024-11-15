@@ -56,6 +56,7 @@ class NextpressApiTheme
     public static function get_block_theme($data)
     {
         $theme = get_field('blocks_theme', 'option');
+        if (!$theme) return ['default'];
         return apply_filters("np_block_theme", $theme);
     }
 }
