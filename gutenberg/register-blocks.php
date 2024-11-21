@@ -189,6 +189,12 @@ function build_acf_fields($fields, $builder)
             case 'accordion':
                 $builder->addAccordion($field['id'], $field_args);
                 break;
+            case 'inner_blocks':
+                if (is_array($field['choices'])) {
+                    $field_args['default_value'] = array_values($field['choices']);
+                }
+                $builder->addCheckbox($field['id'], $field_args);
+                break;
             default:
                 // For any custom or unhandled field types
                 $builder->addField($field_type, $field['id'], $field_args);
@@ -237,6 +243,9 @@ function map_field_type($api_type)
         'flexible_content' => 'flexibleContent',
         // Add any custom field types here
         'nav' => 'select',
+        'gravity_form' => 'select',
+        'theme' => 'select',
+        'inner_blocks' => 'checkbox',
     ];
 
 
@@ -439,6 +448,7 @@ function get_icon($block_name)
 function render_nextpress_block($block, $content = '', $is_preview = false, $post_id = 0)
 {
     $block_name = str_replace('acf/', '', $block['name']);
+    $inner_blocks = get_field('inner_blocks');
     $block_template = [
         [
             'core/paragraph',
@@ -447,6 +457,7 @@ function render_nextpress_block($block, $content = '', $is_preview = false, $pos
             ],
         ],
     ];
+    $allowed_blocks = $inner_blocks ?? [];
     ?>
     <div class="nextpress-block" style="border: 2px solid #007cba; padding: 20px; margin: 10px 0; background-color: #f0f0f1;">
         <h3 style="margin-top: 0; color: #007cba;">Block: <?php echo esc_html(ucfirst(str_replace('-', ' ', $block_name))); ?></h3>
@@ -458,10 +469,11 @@ function render_nextpress_block($block, $content = '', $is_preview = false, $pos
         // }
         ?>
         <?php
-        if (get_field( 'inner_blocks') ) :
+        if ($inner_blocks) :
             ?>
             <InnerBlocks
                 template="<?php echo esc_attr( wp_json_encode( $block_template ) ); ?>"
+                allowedBlocks="<?php echo esc_attr( wp_json_encode( $allowed_blocks ) ); ?>"
             />
             <?php
         endif;
