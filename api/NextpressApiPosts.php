@@ -66,7 +66,7 @@ class NextpressApiPosts
         $args = wp_parse_args($args, array(
             'post_type' => 'any',
             'post_status' => 'publish',
-            'posts_per_page' => get_option('posts_per_page'),
+            'posts_per_page' => isset($args['per_page']) ? $args['per_page'] : get_option('posts_per_page'),
         ));
 
         return $args;
@@ -85,7 +85,7 @@ class NextpressApiPosts
                 'description' => 'Maximum number of items to be returned in result set.',
                 'type' => 'integer',
                 'default' => 10,
-                'sanitize_callback' => 'absint',
+                'sanitize_callback' => 'sanitize_text_field',
             ),
             'search' => array(
                 'description' => 'Limit results to those matching a string.',
