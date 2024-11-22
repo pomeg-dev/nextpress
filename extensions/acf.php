@@ -49,7 +49,7 @@ class NextPressAcfExtension
     {
        // Stringiy block data and check if nav-id exists.
        $block_string = wp_json_encode($block_data);
-       $re = '/{{nav_id-(\d.)}}/m';
+       $re = '/{{nav_id-(\d*)}}/m';
        preg_match_all($re, $block_string, $matches, PREG_SET_ORDER, 0);
        if ($matches) {
            foreach ($matches as $match) {
