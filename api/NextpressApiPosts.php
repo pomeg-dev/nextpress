@@ -158,7 +158,7 @@ class NextpressApiPosts
                 'description' => 'Sort collection by object attribute.',
                 'type' => 'string',
                 'default' => 'date',
-                'enum' => array('author', 'date', 'id', 'include', 'modified', 'parent', 'relevance', 'slug', 'include_slugs', 'title'),
+                'enum' => array('author', 'date', 'id', 'include', 'modified', 'parent', 'relevance', 'slug', 'include_slugs', 'title', 'post__in'),
             ),
             'slug' => array(
                 'description' => 'Limit result set to posts with one or more specific slugs.',
