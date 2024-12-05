@@ -336,7 +336,7 @@ function register_nextpress_blocks()
                 'category'          => $theme,
                 'icon'              => get_icon($block_name),
                 'keywords'          => [$block_name, 'custom'],
-                'supports'          => ['jsx' => true],
+                'supports'          => ['jsx' => true, 'anchor' => true],
             ]);
         }
     });

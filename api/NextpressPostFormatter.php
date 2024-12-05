@@ -198,15 +198,17 @@ class NextpressPostFormatter
         });
 
         foreach ($blocks as $index => $block) {
-
+            $block_id = isset($block['attrs']['anchor']) ? 
+                $block['attrs']['anchor'] : 
+                $block['attrs']['np_custom_id'];
             $formatted_block = array(
-                'id' => $block['id'],
+                'id' => $block_id,
                 'blockName' => $block['blockName'],
                 'slug' => sanitize_title($block['blockName']),
                 'innerHTML' => $block['innerHTML'],
                 'innerContent' => $block['innerContent'],
                 'type' => array(
-                    'id' => 0,
+                    'id' => $block_id,
                     'name' => ucfirst(str_replace('core/', '', $block['blockName'])),
                     'slug' => str_replace('core/', '', $block['blockName']),
                 ),
@@ -215,6 +217,10 @@ class NextpressPostFormatter
                 'data' => apply_filters("np_block_data", $block['attrs']['data'], $block),
             );
 
+            // Add custom classname.
+            if (isset($block['attrs']['className'])) {
+                $formatted_block['className'] = $block['attrs']['className'];
+            }
 
             //handle innerBlocks (default wp blocks like group etc)
             if (!empty($block['innerBlocks'])) {
