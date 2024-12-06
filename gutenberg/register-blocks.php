@@ -458,6 +458,11 @@ function render_nextpress_block($block, $content = '', $is_preview = false, $pos
         ],
     ];
     $allowed_blocks = $inner_blocks ?? [];
+
+    // Preview TEST.
+    if ($block['name'] === 'acf/pomeg-marketing--hero') {
+        render_block_preview($block, $post_id);
+    }
     ?>
     <div class="nextpress-block" style="border: 2px solid #007cba; padding: 20px; margin: 10px 0; background-color: #f0f0f1;">
         <h3 style="margin-top: 0; color: #007cba;">Block: <?php echo esc_html(ucfirst(str_replace('-', ' ', $block_name))); ?></h3>
@@ -480,6 +485,76 @@ function render_nextpress_block($block, $content = '', $is_preview = false, $pos
         ?>
     </div>
 <?php
+}
+
+function render_block_preview($block, $post_id)
+{
+    $wp_post_url = rtrim(get_permalink($post_id), '/');
+    if (!$wp_post_url) return;
+
+    $parsed_url = parse_url(get_blocks_api_url());
+    $base_url = $parsed_url['scheme'] . "://" . $parsed_url['host'];
+    $base_url = isset($parsed_url['port']) ? $base_url . ':' . $parsed_url['port'] : $base_url;
+    $fe_url = str_replace(home_url(), $base_url, $wp_post_url);
+    if (!$fe_url) return;
+
+    // Fetch frontend HTML and parse to DOMDocument.
+    $html = file_get_contents($fe_url);
+    if (!$html) return;
+
+    error_log(print_r('domdoc:', true));
+    error_log(print_r($fe_url, true));
+    error_log(print_r($html, true));
+
+    // Load DOM.
+    $dom = new DOMDocument();
+    @$dom->loadHTML($html);
+    $xpath = new DOMXPath($dom);
+
+    // Inject styles.
+    $cssRules = '';
+    $styleTags = $xpath->query("//style");
+    foreach ($styleTags as $style) {
+            $cssRules .= $style->textContent;
+    }
+    $externalStyles = [];
+    $linkTags = $xpath->query("//link[@rel='stylesheet']");
+    foreach ($linkTags as $link) {
+            $externalStyles[] = $link->getAttribute('href');
+    }
+    $externalStylesContent = '';
+    foreach ($externalStyles as $url) {
+            $styles = file_get_contents($base_url . $url);
+            $externalStylesContent .= $styles;
+    }
+    $combinedStyles = $cssRules . "\n" . $externalStylesContent;
+    ?>
+    <style><?php echo $combinedStyles; ?></style>
+    <?php
+
+    // Replace image srcs.
+    $images = $dom->getElementsByTagName('img');
+    foreach ($images as $img) {
+        $src = $img->getAttribute('src');
+        if (strpos($src, '/_next/image?url=') === 0) {
+            $decoded_url = urldecode(parse_url($src, PHP_URL_QUERY));
+            $decoded_url = str_replace('url=', '', $decoded_url);
+            $position = strpos($decoded_url, '&');
+            if ($position !== false) {
+                $decoded_url = substr($decoded_url, 0, $position);
+            }
+            $img->setAttribute('src', $decoded_url);
+            $img->removeAttribute('srcset');
+        }
+    }
+
+    $heroDivs = $xpath->query("//div[contains(@class, 'hero')]");
+    foreach ($heroDivs as $div) {
+        echo '<div data-theme="pomeg-marketing">' . $dom->saveHTML($div) . '</div>';
+    }
+
+    // error_log(print_r('domdoc:', true));
+    // error_log(print_r($block['name'], true));
 }
 
 // Initialize the block registration
