@@ -165,6 +165,10 @@ add_filter(
             $attributes['np_custom_id'] = uniqid();
         }
 
+        if (empty($attributes['anchor'])) {
+            $attributes['anchor'] = 'block-' . uniqid();
+        }
+
         // if ( empty( $attributes['data']['np_custom_id'] ) ) {
         //     $attributes['data']['np_custom_id'] = 'np_custom_id-' . uniqid();
         // }

@@ -57,6 +57,16 @@ function get_blocks_api_url()
     return $api_url;
 }
 
+function get_base_api_url()
+{
+    $parsed_url = parse_url(get_blocks_api_url());
+    $base_url = $parsed_url['scheme'] . "://" . $parsed_url['host'];
+    $base_url = isset($parsed_url['port']) ? 
+        $base_url . ':' . $parsed_url['port'] : 
+        $base_url;
+    return $base_url;
+}
+
 // Function to map API field types to ACF field types
 function build_acf_fields($fields, $builder)
 {
@@ -312,7 +322,9 @@ function register_nextpress_blocks()
             return;
         }
 
-        foreach ($blocks as $block) {
+        foreach ($blocks as $index => $block) {
+            if (!isset($block['id'])) continue;
+            if (!isset($block['blockName'])) continue;
             $block_name = $block['id']; //in format {theme}--{name} (double hyphen deliberate)
             $theme = explode('--', $block_name)[0];
             $block_title = ucwords(str_replace('-', ' ', $block['blockName']));
@@ -460,105 +472,175 @@ function render_nextpress_block($block, $content = '', $is_preview = false, $pos
     $allowed_blocks = $inner_blocks ?? [];
 
     // Preview TEST.
-    if ($block['name'] === 'acf/pomeg-marketing--hero') {
-        render_block_preview($block, $post_id);
-    }
-    ?>
-    <div class="nextpress-block" style="border: 2px solid #007cba; padding: 20px; margin: 10px 0; background-color: #f0f0f1;">
-        <h3 style="margin-top: 0; color: #007cba;">Block: <?php echo esc_html(ucfirst(str_replace('-', ' ', $block_name))); ?></h3>
-        <?php
-        // You can add more content here if needed, for example:
-        // $fields = get_fields();
-        // foreach ($fields as $key => $value) {
-        //     echo '<p><strong>' . esc_html($key) . ':</strong> ' . esc_html($value) . '</p>';
-        // }
+    $is_preview = render_block_preview($post_id, $block);
+    if (!$is_preview) :
         ?>
-        <?php
-        if ($inner_blocks) :
-            ?>
-            <InnerBlocks
-                template="<?php echo esc_attr( wp_json_encode( $block_template ) ); ?>"
-                allowedBlocks="<?php echo esc_attr( wp_json_encode( $allowed_blocks ) ); ?>"
-            />
+        <div class="nextpress-block" style="border: 2px solid #007cba; padding: 20px; margin: 10px 0; background-color: #f0f0f1;">
+            <h3 style="margin-top: 0; color: #007cba;">Block: <?php echo esc_html(ucfirst(str_replace('-', ' ', $block_name))); ?></h3>
             <?php
-        endif;
-        ?>
-    </div>
-<?php
+            // You can add more content here if needed, for example:
+            // $fields = get_fields();
+            // foreach ($fields as $key => $value) {
+            //     echo '<p><strong>' . esc_html($key) . ':</strong> ' . esc_html($value) . '</p>';
+            // }
+            ?>
+            <?php
+            if ($inner_blocks) :
+                ?>
+                <InnerBlocks
+                    template="<?php echo esc_attr( wp_json_encode( $block_template ) ); ?>"
+                    allowedBlocks="<?php echo esc_attr( wp_json_encode( $allowed_blocks ) ); ?>"
+                />
+                <?php
+            endif;
+            ?>
+        </div>
+        <?php
+    endif;
 }
 
-function render_block_preview($block, $post_id)
-{
-    $wp_post_url = rtrim(get_permalink($post_id), '/');
-    if (!$wp_post_url) return;
+function render_block_preview($post_id, $block) {
+    $block_id = isset($block['anchor']) ? $block['anchor'] : $block['np_custom_id'];
+    if (!$block_id) return;
 
-    $parsed_url = parse_url(get_blocks_api_url());
-    $base_url = $parsed_url['scheme'] . "://" . $parsed_url['host'];
-    $base_url = isset($parsed_url['port']) ? $base_url . ':' . $parsed_url['port'] : $base_url;
-    $fe_url = str_replace(home_url(), $base_url, $wp_post_url);
-    if (!$fe_url) return;
-
-    // Fetch frontend HTML and parse to DOMDocument.
-    $html = file_get_contents($fe_url);
-    if (!$html) return;
-
-    error_log(print_r('domdoc:', true));
-    error_log(print_r($fe_url, true));
-    error_log(print_r($html, true));
+    $temp_file = fetch_tmp_file($post_id);
+    if ($temp_file) {
+        $html = file_get_contents($temp_file);
+    } else {
+        $wp_post_url = rtrim(get_permalink($post_id), '/');
+        $base_url = get_base_api_url();
+        $fe_url = str_replace(home_url(), $base_url, $wp_post_url);
+        if (!$fe_url) return;
+        
+        // Fetch frontend HTML.
+        $html = file_get_contents($fe_url);
+        if (!$html) return;
+    }
 
     // Load DOM.
     $dom = new DOMDocument();
     @$dom->loadHTML($html);
     $xpath = new DOMXPath($dom);
 
-    // Inject styles.
-    $cssRules = '';
-    $styleTags = $xpath->query("//style");
-    foreach ($styleTags as $style) {
-            $cssRules .= $style->textContent;
-    }
-    $externalStyles = [];
-    $linkTags = $xpath->query("//link[@rel='stylesheet']");
-    foreach ($linkTags as $link) {
-            $externalStyles[] = $link->getAttribute('href');
-    }
-    $externalStylesContent = '';
-    foreach ($externalStyles as $url) {
-            $styles = file_get_contents($base_url . $url);
-            $externalStylesContent .= $styles;
-    }
-    $combinedStyles = $cssRules . "\n" . $externalStylesContent;
-    ?>
-    <style><?php echo $combinedStyles; ?></style>
-    <?php
+    $block_div = $xpath->query("//div[@id='" . $block_id . "']")->item(0);
+    if ($block_div) {
+        $block_html = '<div data-theme="' . $block['category'] . '">' . $dom->saveHTML($block_div) . '</div>';
 
-    // Replace image srcs.
-    $images = $dom->getElementsByTagName('img');
-    foreach ($images as $img) {
-        $src = $img->getAttribute('src');
-        if (strpos($src, '/_next/image?url=') === 0) {
-            $decoded_url = urldecode(parse_url($src, PHP_URL_QUERY));
-            $decoded_url = str_replace('url=', '', $decoded_url);
-            $position = strpos($decoded_url, '&');
-            if ($position !== false) {
-                $decoded_url = substr($decoded_url, 0, $position);
+        // Inner Blocks.
+        $inner_dom = new DOMDocument();
+        @$inner_dom->loadHTML($block_html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+        $inner_xpath = new DOMXPath($inner_dom);
+
+        $inner_blocks_div = $inner_xpath->query("//div[contains(@class, 'inner-blocks')]")->item(0);
+
+        if ($inner_blocks_div) {
+            while ($inner_blocks_div->firstChild) {
+                $inner_blocks_div->removeChild($inner_blocks_div->firstChild);
             }
-            $img->setAttribute('src', $decoded_url);
-            $img->removeAttribute('srcset');
+
+            $inner_blocks_element = $inner_dom->createElement('InnerBlocks');
+            $inner_blocks_div->appendChild($inner_blocks_element);
+            $updated_block_html = $inner_dom->saveHTML();
+            echo $updated_block_html;
+        } else {
+            echo $block_html;
+        }
+
+        return true;
+    }
+}
+
+function fetch_tmp_file($post_id) {
+    $prefix = '__html_' . $post_id;
+    $tmp_dir = sys_get_temp_dir();
+    if ($handle = opendir($tmp_dir)) {
+        while (false !== ($file = readdir($handle))) {
+            if (strpos($file, $prefix) === 0) {
+                closedir($handle);
+                return $tmp_dir . DIRECTORY_SEPARATOR . $file;
+            }
+        }
+        closedir($handle);
+    }
+
+    return null;
+}
+
+function handle_frontend_dom()
+{
+    $screen = get_current_screen();
+    if ($screen->base === 'post' && isset($_GET['post'])) {
+        // Get page URL.
+        $post_id = intval($_GET['post']);
+        $wp_post_url = rtrim(get_permalink($post_id), '/');
+        $base_url = get_base_api_url();
+        $fe_url = str_replace(home_url(), $base_url, $wp_post_url);
+
+        // Fetch frontend HTML.
+        $html = file_get_contents($fe_url);
+
+        // Load DOM.
+        if ($html) {
+            $dom = new DOMDocument();
+            @$dom->loadHTML($html);
+            $xpath = new DOMXPath($dom);
+            
+            // Replace image srcs.
+            $images = $dom->getElementsByTagName('img');
+            foreach ($images as $img) {
+                $src = $img->getAttribute('src');
+                if (strpos($src, '/_next/image?url=') !== false) {
+                    $decoded_url = urldecode(parse_url($src, PHP_URL_QUERY));
+                    $decoded_url = str_replace('url=', '', $decoded_url);
+                    $position = strpos($decoded_url, '&');
+                    if ($position !== false) {
+                        $decoded_url = substr($decoded_url, 0, $position);
+                    }
+                    $img->setAttribute('src', $decoded_url);
+                    $img->removeAttribute('srcset');
+                }
+            }
+        
+            // Inject styles.
+            $base_url = get_base_api_url();
+            $css_rules = '';
+            $style_tags = $xpath->query("//style");
+            foreach ($style_tags as $style) {
+                $css_rules .= $style->textContent;
+            }
+            $external_styles = [];
+            $link_tags = $xpath->query("//link[@rel='stylesheet']");
+            foreach ($link_tags as $link) {
+                $external_styles[] = $link->getAttribute('href');
+            }
+            $external_styles_content = '';
+            foreach ($external_styles as $url) {
+                $styles = file_get_contents($base_url . $url);
+                $external_styles_content .= $styles;
+            }
+            $combined_styles = $css_rules . "\n" . $external_styles_content;
+            ?>
+            <style id="fe-style">
+                .inner-blocks .block-editor-block-list__block {
+                    margin-top: 0 !important;
+                    margin-bottom: 0 !important;
+                }
+                <?php echo $combined_styles; ?>
+            </style>
+            <?php
+
+            // Save dom to tmp file.
+            $tmp_file = tempnam(sys_get_temp_dir(), '__html_' . $post_id);
+            file_put_contents($tmp_file, $dom->saveHTML());
         }
     }
-
-    $heroDivs = $xpath->query("//div[contains(@class, 'hero')]");
-    foreach ($heroDivs as $div) {
-        echo '<div data-theme="pomeg-marketing">' . $dom->saveHTML($div) . '</div>';
-    }
-
-    // error_log(print_r('domdoc:', true));
-    // error_log(print_r($block['name'], true));
 }
 
 // Initialize the block registration
 add_action('after_setup_theme', 'register_nextpress_blocks');
+
+// Setup DOMDocument and inject frontend styles.
+add_action('admin_head', 'handle_frontend_dom');
 
 // Populate post_type_rest field.
 add_filter('acf/load_field/name=post_type_rest', function ($field) {
