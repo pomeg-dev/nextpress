@@ -461,18 +461,9 @@ function render_nextpress_block($block, $content = '', $is_preview = false, $pos
 {
     $block_name = str_replace('acf/', '', $block['name']);
     $inner_blocks = get_field('inner_blocks');
-    $block_template = [
-        [
-            'core/paragraph',
-            [
-                'placeholder' => __( 'Type / to choose a block', 'luna' ),
-            ],
-        ],
-    ];
-    $allowed_blocks = $inner_blocks ?? [];
 
-    // Preview TEST.
-    $is_preview = render_block_preview($post_id, $block);
+    // Block Preview.
+    $is_preview = render_block_preview($post_id, $block, $inner_blocks);
     if (!$is_preview) :
         ?>
         <div class="nextpress-block" style="border: 2px solid #007cba; padding: 20px; margin: 10px 0; background-color: #f0f0f1;">
@@ -485,11 +476,20 @@ function render_nextpress_block($block, $content = '', $is_preview = false, $pos
             // }
             ?>
             <?php
+            $block_template = [
+                [
+                    'core/paragraph',
+                    [
+                        'placeholder' => __( 'Type / to choose a block', 'luna' ),
+                    ],
+                ],
+            ];
+            $allowed_blocks = $inner_blocks ?? [];
             if ($inner_blocks) :
                 ?>
                 <InnerBlocks
-                    template="<?php echo esc_attr( wp_json_encode( $block_template ) ); ?>"
-                    allowedBlocks="<?php echo esc_attr( wp_json_encode( $allowed_blocks ) ); ?>"
+                    template="<?php echo esc_attr(wp_json_encode($block_template)); ?>"
+                    allowedBlocks="<?php echo esc_attr(wp_json_encode($allowed_blocks)); ?>"
                 />
                 <?php
             endif;
@@ -499,7 +499,7 @@ function render_nextpress_block($block, $content = '', $is_preview = false, $pos
     endif;
 }
 
-function render_block_preview($post_id, $block) {
+function render_block_preview($post_id, $block, $inner_blocks) {
     $block_id = isset($block['anchor']) ? $block['anchor'] : $block['np_custom_id'];
     if (!$block_id) return;
 
@@ -527,21 +527,39 @@ function render_block_preview($post_id, $block) {
         $block_html = '<div data-theme="' . $block['category'] . '">' . $dom->saveHTML($block_div) . '</div>';
 
         // Inner Blocks.
-        $inner_dom = new DOMDocument();
-        @$inner_dom->loadHTML($block_html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-        $inner_xpath = new DOMXPath($inner_dom);
-
-        $inner_blocks_div = $inner_xpath->query("//div[contains(@class, 'inner-blocks')]")->item(0);
-
-        if ($inner_blocks_div) {
-            while ($inner_blocks_div->firstChild) {
-                $inner_blocks_div->removeChild($inner_blocks_div->firstChild);
+        if ($inner_blocks) {
+            $inner_dom = new DOMDocument();
+            @$inner_dom->loadHTML($block_html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+            $inner_xpath = new DOMXPath($inner_dom);
+    
+            $inner_blocks_div = $inner_xpath->query("//div[contains(@class, 'inner-blocks')]")->item(0);
+            if ($inner_blocks_div) {
+                $block_template = [
+                    [
+                        'core/paragraph',
+                        [
+                            'placeholder' => __( 'Type / to choose a block', 'luna' ),
+                        ],
+                    ],
+                ];
+                $allowed_blocks = $inner_blocks ?? [];
+                while ($inner_blocks_div->firstChild) {
+                    $inner_blocks_div->removeChild($inner_blocks_div->firstChild);
+                }
+    
+                $inner_blocks_element = $inner_dom->createElement('InnerBlocks');
+                $inner_blocks_element->setAttribute(
+                    'template',
+                    json_encode($block_template)
+                );
+                $inner_blocks_element->setAttribute(
+                    'allowedBlocks',
+                    json_encode($allowed_blocks)
+                );
+                $inner_blocks_div->appendChild($inner_blocks_element);
+                $updated_block_html = $inner_dom->saveHTML();
+                echo $updated_block_html;
             }
-
-            $inner_blocks_element = $inner_dom->createElement('InnerBlocks');
-            $inner_blocks_div->appendChild($inner_blocks_element);
-            $updated_block_html = $inner_dom->saveHTML();
-            echo $updated_block_html;
         } else {
             echo $block_html;
         }
@@ -566,81 +584,140 @@ function fetch_tmp_file($post_id) {
     return null;
 }
 
-function handle_frontend_dom()
+function delete_tmp_file($post_id) {
+    $prefix = '__html_' . $post_id;
+    $temp_dir = sys_get_temp_dir();
+    if ($handle = opendir($temp_dir)) {
+        while (false !== ($file = readdir($handle))) {
+            $file_path = $temp_dir . DIRECTORY_SEPARATOR . $file;
+            if (strpos($file, $prefix) === 0 && is_file($file_path)) {
+                unlink($file_path);
+            }
+        }
+        closedir($handle);
+    }
+}
+
+function handle_dom_preload($post_id, $load_styles = false)
+{
+    $wp_post_url = rtrim(get_permalink($post_id), '/');
+    $base_url = get_base_api_url();
+    $fe_url = str_replace(home_url(), $base_url, $wp_post_url);
+    if (!$fe_url) return;
+    
+    // Fetch frontend HTML.
+    $html = file_get_contents($fe_url);
+    if (!$html) return;
+
+    // Load DOM.
+    $dom = new DOMDocument();
+    @$dom->loadHTML($html);
+    $xpath = new DOMXPath($dom);
+    
+    // Replace image srcs.
+    $images = $dom->getElementsByTagName('img');
+    foreach ($images as $img) {
+        $src = $img->getAttribute('src');
+        if (strpos($src, '/_next/image?url=') !== false) {
+            $decoded_url = urldecode(parse_url($src, PHP_URL_QUERY));
+            $decoded_url = str_replace('url=', '', $decoded_url);
+            $position = strpos($decoded_url, '&');
+            if ($position !== false) {
+                $decoded_url = substr($decoded_url, 0, $position);
+            }
+            $img->setAttribute('src', $decoded_url);
+            $img->removeAttribute('srcset');
+        }
+    }
+
+    // Inject styles.
+    if ($load_styles) {
+        $base_url = get_base_api_url();
+        $css_rules = '';
+        $style_tags = $xpath->query("//style");
+        foreach ($style_tags as $style) {
+            $css_rules .= $style->textContent;
+        }
+        $external_styles = [];
+        $link_tags = $xpath->query("//link[@rel='stylesheet']");
+        foreach ($link_tags as $link) {
+            $external_styles[] = $link->getAttribute('href');
+        }
+        $external_styles_content = '';
+        foreach ($external_styles as $url) {
+            $styles = file_get_contents($base_url . $url);
+            $external_styles_content .= $styles;
+        }
+        $combined_styles = $css_rules . "\n" . $external_styles_content;
+        ?>
+        <style id="fe-style">
+            .inner-blocks .block-editor-block-list__block {
+                margin-top: 0 !important;
+                margin-bottom: 0 !important;
+            }
+            .break-out {
+                width: auto !important;
+                left: unset !important;
+                margin-left: unset !important;
+            }
+            .swiper-wrapper {
+                gap: 1rem;
+            }
+            .swiper-wrapper .swiper-slide {
+                width: calc(100% / 3);
+                opacity: 1 !important;
+            }
+            .swiper-wrapper .swiper-slide.testimonials-slider-item {
+                width: 80%;
+            }
+            <?php echo $combined_styles; ?>
+        </style>
+        <?php
+    }
+
+    // Save dom to tmp file.
+    $tmp_file = tempnam(sys_get_temp_dir(), '__html_' . $post_id);
+    file_put_contents($tmp_file, $dom->saveHTML());
+}
+
+function revalidate_fetch_route($tag)
+{
+    $fe_url = get_base_api_url();
+    $request_url = $fe_url . "/api/revalidate?tag=" . $tag;
+    if ($fe_url) {
+        return wp_remote_get($request_url);
+    }
+}
+
+function preload_frontend_page()
 {
     $screen = get_current_screen();
     if ($screen->base === 'post' && isset($_GET['post'])) {
-        // Get page URL.
         $post_id = intval($_GET['post']);
-        $wp_post_url = rtrim(get_permalink($post_id), '/');
-        $base_url = get_base_api_url();
-        $fe_url = str_replace(home_url(), $base_url, $wp_post_url);
-
-        // Fetch frontend HTML.
-        $html = file_get_contents($fe_url);
-
-        // Load DOM.
-        if ($html) {
-            $dom = new DOMDocument();
-            @$dom->loadHTML($html);
-            $xpath = new DOMXPath($dom);
-            
-            // Replace image srcs.
-            $images = $dom->getElementsByTagName('img');
-            foreach ($images as $img) {
-                $src = $img->getAttribute('src');
-                if (strpos($src, '/_next/image?url=') !== false) {
-                    $decoded_url = urldecode(parse_url($src, PHP_URL_QUERY));
-                    $decoded_url = str_replace('url=', '', $decoded_url);
-                    $position = strpos($decoded_url, '&');
-                    if ($position !== false) {
-                        $decoded_url = substr($decoded_url, 0, $position);
-                    }
-                    $img->setAttribute('src', $decoded_url);
-                    $img->removeAttribute('srcset');
-                }
-            }
-        
-            // Inject styles.
-            $base_url = get_base_api_url();
-            $css_rules = '';
-            $style_tags = $xpath->query("//style");
-            foreach ($style_tags as $style) {
-                $css_rules .= $style->textContent;
-            }
-            $external_styles = [];
-            $link_tags = $xpath->query("//link[@rel='stylesheet']");
-            foreach ($link_tags as $link) {
-                $external_styles[] = $link->getAttribute('href');
-            }
-            $external_styles_content = '';
-            foreach ($external_styles as $url) {
-                $styles = file_get_contents($base_url . $url);
-                $external_styles_content .= $styles;
-            }
-            $combined_styles = $css_rules . "\n" . $external_styles_content;
-            ?>
-            <style id="fe-style">
-                .inner-blocks .block-editor-block-list__block {
-                    margin-top: 0 !important;
-                    margin-bottom: 0 !important;
-                }
-                <?php echo $combined_styles; ?>
-            </style>
-            <?php
-
-            // Save dom to tmp file.
-            $tmp_file = tempnam(sys_get_temp_dir(), '__html_' . $post_id);
-            file_put_contents($tmp_file, $dom->saveHTML());
-        }
+        handle_dom_preload($post_id, true);
     }
+}
+
+function reload_frontend_page($post_id)
+{
+    if (!$post_id) return;
+    if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+    if (wp_is_post_revision($post_id)) return;
+
+    revalidate_fetch_route('post');
+    revalidate_fetch_route('posts');
+    delete_tmp_file($post_id);
+    handle_dom_preload($post_id);
 }
 
 // Initialize the block registration
 add_action('after_setup_theme', 'register_nextpress_blocks');
 
 // Setup DOMDocument and inject frontend styles.
-add_action('admin_head', 'handle_frontend_dom');
+add_action('admin_head', 'preload_frontend_page');
+
+// Refetch DOMDocument on post save.
+add_action( 'save_post', 'reload_frontend_page');
 
 // Populate post_type_rest field.
 add_filter('acf/load_field/name=post_type_rest', function ($field) {
