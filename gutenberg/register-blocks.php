@@ -500,8 +500,9 @@ function render_nextpress_block($block, $content = '', $is_preview = false, $pos
 }
 
 function render_block_preview($post_id, $block, $inner_blocks) {
+    if (get_post_status($post_id) !== 'publish') return false;
     $block_id = isset($block['anchor']) ? $block['anchor'] : $block['np_custom_id'];
-    if (!$block_id) return;
+    if (!$block_id) return false;
 
     $temp_file = fetch_tmp_file($post_id);
     if ($temp_file) {
@@ -510,11 +511,11 @@ function render_block_preview($post_id, $block, $inner_blocks) {
         $wp_post_url = rtrim(get_permalink($post_id), '/');
         $base_url = get_base_api_url();
         $fe_url = str_replace(home_url(), $base_url, $wp_post_url);
-        if (!$fe_url) return;
+        if (!$fe_url) return false;
         
         // Fetch frontend HTML.
         $html = file_get_contents($fe_url);
-        if (!$html) return;
+        if (!$html) return false;
     }
 
     // Load DOM.
@@ -600,6 +601,7 @@ function delete_tmp_file($post_id) {
 
 function handle_dom_preload($post_id, $load_styles = false)
 {
+    if (get_post_status($post_id) !== 'publish') return;
     $wp_post_url = rtrim(get_permalink($post_id), '/');
     $base_url = get_base_api_url();
     $fe_url = str_replace(home_url(), $base_url, $wp_post_url);

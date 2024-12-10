@@ -219,3 +219,17 @@ function refresh_nextpress_wp_cookie()
     }
 }
 add_action('wp', 'refresh_nextpress_wp_cookie');
+
+
+function nextpress_edit_post_preview_link($link, WP_Post $post)
+{
+    $fe_url = "http://localhost:3000";
+    $api_url = get_field('blocks_api_url', 'option');
+    if ($api_url) {
+        $fe_url = $parsed_url['scheme'] . "://" . $parsed_url['host'];
+    }
+    $post_id = get_the_ID();
+    $draft_link =  $fe_url . "/api/draft?secret=<token>&id=" . $post_id;
+    return $draft_link;
+}
+add_filter('preview_post_link', 'nextpress_edit_post_preview_link', 10, 2);
