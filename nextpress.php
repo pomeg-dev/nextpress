@@ -122,6 +122,7 @@ function get_nextpress_frontend_url()
     $fe_url = "http://localhost:3000";
     $api_url = get_field('blocks_api_url', 'option');
     if ($api_url) {
+        $parsed_url = parse_url($api_url);
         $fe_url = $parsed_url['scheme'] . "://" . $parsed_url['host'];
     }
 
