@@ -31,9 +31,11 @@ class NextpressApiRouter
         $page_for_posts_id = get_option('page_for_posts');
         $page_for_posts_url = get_permalink(get_option('page_for_posts'));
         $page_for_posts_path = trim(str_replace(site_url(), '', $page_for_posts_url), '/');
-
-        if (!$path) $post = get_homepage();
-        else if ($page_for_posts_path == $path) {
+        
+        if (!$path) {
+            $post_id = $data->get_param('p') ?? $data->get_param('page_id');
+            $post = $post_id ? get_post($post_id) : get_homepage();
+        } else if ($page_for_posts_path == $path) {
             $post = get_post($page_for_posts_id);
         } else {
             $post_id = url_to_postid($path);

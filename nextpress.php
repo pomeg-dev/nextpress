@@ -117,6 +117,17 @@ function disable_editing_if_no_blocks()
     }
 }
 
+function get_nextpress_frontend_url()
+{
+    $fe_url = "http://localhost:3000";
+    $api_url = get_field('blocks_api_url', 'option');
+    if ($api_url) {
+        $fe_url = $parsed_url['scheme'] . "://" . $parsed_url['host'];
+    }
+
+    return $fe_url;
+}
+
 function disable_publishing()
 {
 ?>
@@ -220,14 +231,33 @@ function refresh_nextpress_wp_cookie()
 }
 add_action('wp', 'refresh_nextpress_wp_cookie');
 
+function nextpress_redirect_frontend()
+{
+    $fe_url = get_nextpress_frontend_url();
+    //if multisite req, remove the blog url
+    if (is_multisite()) {
+        $path = get_blog_details()->path;
+        $req = str_replace($path, "/", $_SERVER['REQUEST_URI']);
+    } else {
+        $req = $_SERVER['REQUEST_URI'];
+    }
+    if ($fe_url) {
+        parse_str(parse_url($req, PHP_URL_QUERY), $queryParams);
+        if (
+            isset($queryParams['page_id'])
+        ) {
+            $page_id = $queryParams['page_id'];
+            $req = '/api/draft?secret=<token>&id=' . $page_id;
+        }
+        wp_redirect($fe_url . $req, 301);
+        exit;
+    }
+}
+add_action('template_redirect', 'nextpress_redirect_frontend', 10, 1);
 
 function nextpress_edit_post_preview_link($link, WP_Post $post)
 {
-    $fe_url = "http://localhost:3000";
-    $api_url = get_field('blocks_api_url', 'option');
-    if ($api_url) {
-        $fe_url = $parsed_url['scheme'] . "://" . $parsed_url['host'];
-    }
+    $fe_url = get_nextpress_frontend_url();
     $post_id = get_the_ID();
     $draft_link =  $fe_url . "/api/draft?secret=<token>&id=" . $post_id;
     return $draft_link;
