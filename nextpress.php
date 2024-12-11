@@ -259,8 +259,7 @@ add_action('template_redirect', 'nextpress_redirect_frontend', 10, 1);
 function nextpress_edit_post_preview_link($link, WP_Post $post)
 {
     $fe_url = get_nextpress_frontend_url();
-    $post_id = get_the_ID();
-    $draft_link =  $fe_url . "/api/draft?secret=<token>&id=" . $post_id;
+    $draft_link =  $fe_url . "/api/draft?secret=<token>&id=" . $post->ID;
     return $draft_link;
 }
 add_filter('preview_post_link', 'nextpress_edit_post_preview_link', 10, 2);
