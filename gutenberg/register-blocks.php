@@ -651,6 +651,9 @@ function handle_dom_preload($post_id, $load_styles = false)
             $external_styles_content .= $styles;
         }
         $combined_styles = $css_rules . "\n" . $external_styles_content;
+        $combined_styles = preg_replace('/\.\__variable_[a-zA-Z0-9]+/', 'body', $combined_styles);
+        $fe_url = get_base_api_url();
+        $combined_styles = preg_replace('/src: url\((\/[^\)]+\.[a-zA-Z0-9]+)\)/', 'src: url(' . $fe_url . '$1)', $combined_styles);
         ?>
         <style id="fe-style">
             .inner-blocks .block-editor-block-list__block {
