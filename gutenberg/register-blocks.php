@@ -671,6 +671,7 @@ function handle_dom_preload($post_id, $load_styles = false)
             .swiper-wrapper .swiper-slide {
                 flex: 1;
                 width: auto;
+                max-width: 33.3333%;
                 opacity: 1 !important;
             }
             .swiper-wrapper .swiper-slide.testimonials-slider-item {
