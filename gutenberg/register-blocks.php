@@ -669,9 +669,7 @@ function handle_dom_preload($post_id, $load_styles = false)
                 gap: 1rem;
             }
             .swiper-wrapper .swiper-slide {
-                flex: 1;
-                width: auto;
-                max-width: 33.3333%;
+                width: 50%;
                 opacity: 1 !important;
             }
             .swiper-wrapper .swiper-slide.testimonials-slider-item {
