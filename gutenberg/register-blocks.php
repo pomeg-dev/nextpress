@@ -675,6 +675,9 @@ function handle_dom_preload($post_id, $load_styles = false)
             .swiper-wrapper .swiper-slide.testimonials-slider-item {
                 width: 80%;
             }
+            .opacity-0 {
+                opacity: 1 !important;
+            }
             <?php echo $combined_styles; ?>
         </style>
         <?php
