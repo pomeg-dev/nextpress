@@ -34,6 +34,7 @@ class NextpressPostFormatter
         $formatted_post = self::include_is_homepage($formatted_post);
         $formatted_post = self::include_category_names($formatted_post);
         $formatted_post = self::include_post_path($formatted_post);
+        $formatted_post = self::include_breadcrumbs($formatted_post);
         $formatted_post = self::return_post_revision_for_preview($formatted_post);
 
         return apply_filters('np_post_object', $formatted_post);
@@ -292,6 +293,36 @@ class NextpressPostFormatter
         $formatted_post['path'] = str_replace($base_url, '', $permalink);
         $formatted_post['wordpress_path'] = get_permalink($post->ID);
 
+        return $formatted_post;
+    }
+
+    private static function include_breadcrumbs($formatted_post)
+    {
+        $post = get_post($formatted_post['id']);
+        $breadcrumbs = '<nav class="breadcrumbs">';
+        $breadcrumbs .= '<a href="' . home_url() . '">Home</a>';
+        if ($post->post_type === 'post') {
+            $page_for_posts = get_option('page_for_posts');
+            $breadcrumbs .= ' | <a href="' . get_post_type_archive_link($post->post_type) . '">' . get_the_title($page_for_posts) . '</a>';
+            $breadcrumbs .= ' | <span>' . get_the_title($post) . '</span>';
+        } elseif ($post->post_type === 'page') {
+            if ($post->post_parent) {
+                $parent_id = $post->post_parent;
+                $parent_links = array();
+                while ($parent_id) {
+                    $page = get_post($parent_id);
+                    $parent_links[] = '<a href="' . get_permalink($page->ID) . '">' . get_the_title($page->ID) . '</a>';
+                    $parent_id = $page->post_parent;
+                }
+                $parent_links = array_reverse($parent_links);
+                $breadcrumbs .= ' | ' . implode(' | ', $parent_links);
+            }
+
+            $breadcrumbs .= ' | <span>' . get_the_title($post) . '</span>';
+        }
+        $breadcrumbs .= '</nav>';
+
+        $formatted_post['breadcrumbs'] = $breadcrumbs;
         return $formatted_post;
     }
 
