@@ -751,3 +751,14 @@ add_filter('acf/load_field/name=taxonomy_rest', function ($field) {
     // return the field
     return $field;
 });
+
+// Populate current_post field with current post object.
+add_filter('acf/load_field/name=current_post', function ($field) {
+    $current_post_id = get_the_ID();
+    if ($current_post_id) {
+        $field['value'] = $current_post_id;
+    }
+
+    // return the field
+    return $field;
+});
