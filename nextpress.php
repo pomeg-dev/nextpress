@@ -55,6 +55,13 @@ require_once plugin_dir_path(__FILE__) . 'extensions/acf.php';
 require_once plugin_dir_path(__FILE__) . 'extensions/yoast.php';
 require_once plugin_dir_path(__FILE__) . 'extensions/gravity-forms.php';
 
+
+/*----------------------------------------------------------------------------*
+* User Flow
+*----------------------------------------------------------------------------*/
+require_once plugin_dir_path(__FILE__) . 'user-flow/user-flow.php';
+
+
 class Nextpress
 {
 
@@ -263,3 +270,9 @@ function nextpress_edit_post_preview_link($link, WP_Post $post)
     return $draft_link;
 }
 add_filter('preview_post_link', 'nextpress_edit_post_preview_link', 10, 2);
+
+
+// DUMPER FUNCTION
+function np_dumper($variable) {
+    error_log('NP DUMP: ' . print_r($variable, true));
+}

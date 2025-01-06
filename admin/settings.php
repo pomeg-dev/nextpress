@@ -267,12 +267,46 @@ $coming_soon
         'ui' => 1,
     ]);
 
+$user_flow = new FieldsBuilder('user_flow');
+$user_flow
+    ->addTab("user_flow")
+    ->addTrueFalse("enable_user_flow", [
+        'ui' => 1,
+    ])
+    ->addTrueFalse("enable_login_redirect", [
+        'instructions' => 'If enabled, users will be redirected to the login page if not logged in',
+        'ui' => 1,
+        'conditional_logic' => array(
+            array(
+                array(
+                    'field' => 'enable_user_flow',
+                    'operator' => '==',
+                    'value' => '1',
+                ),
+            ),
+        ),
+    ])
+    ->addPostObject('login_page', [
+        'conditional_logic' => array(
+            array(
+                array(
+                    'field' => 'enable_user_flow',
+                    'operator' => '==',
+                    'value' => '1',
+                ),
+            ),
+        ),
+        'post_type' => ['page'],
+        'ui' => 1,
+    ]);
+
 $settings = new FieldsBuilder('General-settings');
 $settings
     ->addFields($blocks)
     ->addFields($google_tag_manager)
     ->addFields($page_404)
     ->addFields($coming_soon)
+    ->addFields($user_flow)
     ->setLocation('options_page', '==', 'acf-options-settings')
     ->setGroupConfig('style', 'seamless');
 
