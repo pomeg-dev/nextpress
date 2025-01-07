@@ -41,6 +41,11 @@ class NextPressUserFlow {
   public function login_callback() {
     $credentials = file_get_contents('php://input');
     $credentials = json_decode($credentials, true);
+    $referrer = '';
+    if (isset($credentials['referrer'])) {
+      $referrer = $credentials['referrer'];
+      unset($credentials['referrer']);
+    }
 
     if (isset($credentials['user_login']) && isset($credentials['user_password'])) {
       $user = wp_signon($credentials, is_ssl());
@@ -60,22 +65,27 @@ class NextPressUserFlow {
       // Generate a new JWT token.
       $jwt_token = $this->generate_jwt_token($user->ID);
 
-      return new WP_REST_Response([
+      $response = [
         'message' => __('User logged in successfully', 'nextpress'),
         'jwt_token' => $jwt_token,
         'success' => true,
-      ]);
+      ];
+      if ($referrer) {
+        $response['referrer'] = $referrer;
+      }
+      return new WP_REST_Response($response);
     }
   }
 
   private function generate_jwt_token($user_id) {
     $issued_at = time();
-    $expiration_time = $issued_at + (DAY_IN_SECONDS * 7); // JWT expires in 7 days
+    $expiration_time = $issued_at + (DAY_IN_SECONDS * 7);
     $payload = [
       'iss' => get_bloginfo('url'),
       'iat' => $issued_at,
       'exp' => $expiration_time,
       'user_id' => $user_id,
+      'blog_id' => get_current_blog_id(),
     ];
 
     $jwt = JWT::encode($payload, JWT_AUTH_SECRET_KEY, 'HS256');
