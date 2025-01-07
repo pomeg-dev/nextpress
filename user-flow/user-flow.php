@@ -14,8 +14,7 @@ class NextPressUserFlow {
 
   public function init() {
     add_action('rest_pre_serve_request', function($response) {
-      // header('Access-Control-Allow-Origin: ' . get_nextpress_frontend_url());
-      header('Access-Control-Allow-Origin: *');
+      header('Access-Control-Allow-Origin: ' . get_nextpress_frontend_url());
       header('Access-Control-Allow-Credentials: true');
       header('Access-Control-Allow-Headers: Content-Type, Authorization');
       return $response;
@@ -24,9 +23,19 @@ class NextPressUserFlow {
     // Register routes.
     $this->register_routes();
 
-    // redierct to login page
-    // enable_login_redirect
-    // login_page - register_page
+    // Redierct to login page.
+    add_action('login_init', function() {
+      $is_login_redirect = get_field('enable_login_redirect', 'option');
+      $login_page = get_field('login_page', 'option');
+      if (
+        $is_login_redirect && 
+        $login_page && 
+        strpos($_SERVER['REQUEST_URI'], 'wp-login.php') !== false
+      ) {
+        wp_redirect(get_permalink($login_page['id']));
+        exit;
+      }
+    });
   }
 
   private function register_routes() {
@@ -34,6 +43,14 @@ class NextPressUserFlow {
       register_rest_route('nextpress', '/login', array(
           'methods' => 'POST',
           'callback' => [ $this, 'login_callback' ],
+      ));
+      register_rest_route('nextpress', '/request-reset', array(
+          'methods' => 'POST',
+          'callback' => [ $this, 'forgot_password_callback' ],
+      ));
+      register_rest_route('nextpress', '/reset-password', array(
+          'methods' => 'POST',
+          'callback' => [ $this, 'reset_password_callback' ],
       ));
     });
   }
@@ -90,6 +107,76 @@ class NextPressUserFlow {
 
     $jwt = JWT::encode($payload, JWT_AUTH_SECRET_KEY, 'HS256');
     return $jwt;
+  }
+
+  public function forgot_password_callback() {
+    $email = file_get_contents('php://input');
+    $email = json_decode($email, true);
+    $email = $email && isset($email['email']) ? $email['email'] : '';
+
+    if (!$email) {
+      return new WP_REST_Response([
+        'message' => __('Email is required', 'nextpress'),
+        'success' => false,
+      ]);
+    }
+
+    $user = get_user_by('email', $email);
+    if (!$user) {
+      $user = get_user_by('login', $email);
+    }
+
+    if (!$user) {
+      return new WP_REST_Response([
+        'message' => __('User not found', 'nextpress'),
+        'success' => false,
+      ]);
+    }
+
+    $blog_name = get_bloginfo('name');
+    $reset_key = get_password_reset_key($user);
+    $login_page = get_field('login_page', 'option');
+    $reset_url = $login_page ? 
+      $login_page['wordpress_path'] . '?action=rp&key=' . $reset_key . '&login=' . rawurlencode($user->user_login) : 
+      home_url("/wp-login.php?action=rp&key=$reset_key&login=" . rawurlencode($user->user_login));
+
+    $subject = "[$blog_name] Password Reset Request";
+    $message = "Hello, \n\nYou can reset your password by clicking on the following link: $reset_url";
+    wp_mail($user->user_email, $subject, $message);
+
+    return new WP_REST_Response([
+      'message' => __('Reset link sent, please check your email', 'nextpress'),
+      'success' => true,
+    ]);
+  }
+
+  public function reset_password_callback() {
+    $data = file_get_contents('php://input');
+    $data = json_decode($data, true);
+    $reset_key = $data['key'];
+    $login = $data['login'];
+    $password = $data['password'];
+
+    if (!$reset_key || !$login || !$password) {
+      return new WP_REST_Response([
+        'message' => __('Reset link invalid, please try again', 'nextpress'),
+        'success' => false,
+      ]);
+    }
+
+    $user = check_password_reset_key($reset_key, $login);
+    if (is_wp_error($user)) {
+      return new WP_REST_Response([
+        'message' => $user->get_error_message(),
+        'success' => false,
+      ]);
+    }
+
+    reset_password($user, $password);
+    return new WP_REST_Response([
+      'message' => __('Password reset successfully', 'nextpress'),
+      'success' => true,
+    ]);
   }
 }
 
