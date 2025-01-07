@@ -298,6 +298,19 @@ $user_flow
         ),
         'post_type' => ['page'],
         'ui' => 1,
+    ])
+    ->addPostObject('register_page', [
+        'conditional_logic' => array(
+            array(
+                array(
+                    'field' => 'enable_user_flow',
+                    'operator' => '==',
+                    'value' => '1',
+                ),
+            ),
+        ),
+        'post_type' => ['page'],
+        'ui' => 1,
     ]);
 
 $settings = new FieldsBuilder('General-settings');
