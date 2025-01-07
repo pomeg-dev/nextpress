@@ -286,6 +286,19 @@ $user_flow
             ),
         ),
     ])
+    ->addTextarea("email_domain_whitelist", [
+        'instructions' => 'Only below domains will be allowed to register, one domain per line',
+        'default_value' => 'pomegranate.co.uk',
+        'conditional_logic' => array(
+            array(
+                array(
+                    'field' => 'enable_user_flow',
+                    'operator' => '==',
+                    'value' => '1',
+                ),
+            ),
+        ),
+    ])
     ->addPostObject('login_page', [
         'conditional_logic' => array(
             array(

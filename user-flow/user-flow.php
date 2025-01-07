@@ -52,46 +52,58 @@ class NextPressUserFlow {
           'methods' => 'POST',
           'callback' => [ $this, 'reset_password_callback' ],
       ));
+      register_rest_route('nextpress', '/register', array(
+          'methods' => 'POST',
+          'callback' => [ $this, 'register_callback' ],
+          'permission_callback' => '__return_true',
+      ));
     });
   }
 
-  public function login_callback() {
-    $credentials = file_get_contents('php://input');
-    $credentials = json_decode($credentials, true);
-    $referrer = '';
-    if (isset($credentials['referrer'])) {
-      $referrer = $credentials['referrer'];
-      unset($credentials['referrer']);
+  public function login_callback(WP_REST_Request $request) {
+    $referrer = sanitize_text_field($request->get_param('referrer'));
+    $user_login = sanitize_text_field($request->get_param('user_login'));
+    $user_password = sanitize_text_field($request->get_param('user_password'));
+    $remember = filter_var($request->get_param('remember'), FILTER_SANITIZE_NUMBER_INT);
+
+    if (!$user_login || !$user_password) {
+      return new WP_REST_Response([
+        'message' => __('All fields are required', 'nextpress'),
+        'success' => false,
+      ]);
     }
 
-    if (isset($credentials['user_login']) && isset($credentials['user_password'])) {
-      $user = wp_signon($credentials, is_ssl());
+    $credentials = [
+      'user_login' => $user_login,
+      'user_password' => $user_password,
+      'remember' => $remember,
+    ];
 
-      if (is_wp_error($user)) {
-        return new WP_REST_Response([
-          'message' => $user->get_error_message(),
-          'success' => false,
-        ]);
-      }
-      
-      // Set WP cookies.
-      wp_clear_auth_cookie();
-      wp_set_current_user($user->ID);
-      wp_set_auth_cookie($user->ID, true);
-
-      // Generate a new JWT token.
-      $jwt_token = $this->generate_jwt_token($user->ID);
-
-      $response = [
-        'message' => __('User logged in successfully', 'nextpress'),
-        'jwt_token' => $jwt_token,
-        'success' => true,
-      ];
-      if ($referrer) {
-        $response['referrer'] = $referrer;
-      }
-      return new WP_REST_Response($response);
+    $user = wp_signon($credentials, is_ssl());
+    if (is_wp_error($user)) {
+      return new WP_REST_Response([
+        'message' => $user->get_error_message(),
+        'success' => false,
+      ]);
     }
+    
+    // Set WP cookies.
+    wp_clear_auth_cookie();
+    wp_set_current_user($user->ID);
+    wp_set_auth_cookie($user->ID, true);
+
+    // Generate a new JWT token.
+    $jwt_token = $this->generate_jwt_token($user->ID);
+
+    $response = [
+      'message' => __('User logged in successfully', 'nextpress'),
+      'jwt_token' => $jwt_token,
+      'success' => true,
+    ];
+    if ($referrer) {
+      $response['referrer'] = $referrer;
+    }
+    return new WP_REST_Response($response);
   }
 
   private function generate_jwt_token($user_id) {
@@ -109,10 +121,8 @@ class NextPressUserFlow {
     return $jwt;
   }
 
-  public function forgot_password_callback() {
-    $email = file_get_contents('php://input');
-    $email = json_decode($email, true);
-    $email = $email && isset($email['email']) ? $email['email'] : '';
+  public function forgot_password_callback(WP_REST_Request $request) {
+    $email = sanitize_email($request->get_param('email'));
 
     if (!$email) {
       return new WP_REST_Response([
@@ -150,12 +160,10 @@ class NextPressUserFlow {
     ]);
   }
 
-  public function reset_password_callback() {
-    $data = file_get_contents('php://input');
-    $data = json_decode($data, true);
-    $reset_key = $data['key'];
-    $login = $data['login'];
-    $password = $data['password'];
+  public function reset_password_callback(WP_REST_Request $request) {
+    $reset_key = sanitize_text_field($request->get_param('key'));
+    $login = sanitize_text_field($request->get_param('login'));
+    $password = sanitize_text_field($request->get_param('password'));
 
     if (!$reset_key || !$login || !$password) {
       return new WP_REST_Response([
@@ -176,6 +184,66 @@ class NextPressUserFlow {
     return new WP_REST_Response([
       'message' => __('Password reset successfully', 'nextpress'),
       'success' => true,
+    ]);
+  }
+
+  public function register_callback(WP_REST_Request $request) {
+    if (!get_option('users_can_register')) {
+      return new WP_REST_Response([
+        'message' => __('Registration is closed.', 'nextpress'),
+        'success' => false,
+      ]);
+    }
+
+    $username = sanitize_text_field($request->get_param('username'));
+    $email = sanitize_email($request->get_param('email'));
+    $password = sanitize_text_field($request->get_param('password'));
+
+    if (!$username || !$email || !$password) {
+      return new WP_REST_Response([
+        'message' => __('All fields are required.', 'nextpress'),
+        'success' => false,
+      ]);
+    }
+
+    // Check if already exists.
+    if (email_exists($email)) {
+      return new WP_REST_Response([
+        'message' => __('User is already registered.', 'nextpress'),
+        'success' => false,
+      ]);
+    }
+
+    // Check if email is whitelisted.
+    $domain_whitelist = get_field('email_domain_whitelist', 'option');
+    $domains = explode("\n", $domain_whitelist);
+    if (!$domain_whitelist || !in_array(explode('@', $email)[1], $domains)) {
+      return new WP_REST_Response([
+        'message' => __('Email domain is not allowed.', 'nextpress'),
+        'success' => false,
+      ]);
+    }
+
+    $user_id = wp_create_user($username, $password, $email);
+    if (is_wp_error($user_id)) {
+      return new WP_REST_Response([
+        'message' => $user->get_error_message(),
+        'success' => false,
+      ]);
+    }
+
+    // Send email verification.
+    $blog_name = get_bloginfo('name');
+    $login_page = get_field('login_page', 'option');
+    $redirect_link = $login_page ? $login_page['wordpress_path'] : home_url('/login');
+    $subject = "[$blog_name] Registration Successful";
+    $message = "Hello, \n\nYou can now login by clicking on the following link: $redirect_link";
+    wp_mail($email, $subject, $message);
+
+    return new WP_REST_Response([
+      'message' => __('User registered successfully, check your inbox for further instructions.', 'nextpress'),
+      'success' => true,
+      'redirect' => $redirect_link,
     ]);
   }
 }
