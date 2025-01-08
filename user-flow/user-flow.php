@@ -23,7 +23,21 @@ class NextPressUserFlow {
     // Register routes.
     $this->register_routes();
 
-    // Redierct to login page.
+    // Redirect to register page.
+    add_action('login_init', function() {
+      $is_login_redirect = get_field('enable_login_redirect', 'option');
+      $register_page = get_field('register_page', 'option');
+      if (
+        $is_login_redirect && 
+        $register_page && 
+        strpos($_SERVER['REQUEST_URI'], 'wp-login.php?action=register') !== false
+      ) {
+        wp_redirect(get_permalink($register_page['id']));
+        exit;
+      }
+    });
+
+    // Redirect to login page.
     add_action('login_init', function() {
       $is_login_redirect = get_field('enable_login_redirect', 'option');
       $login_page = get_field('login_page', 'option');
@@ -107,6 +121,7 @@ class NextPressUserFlow {
   }
 
   private function generate_jwt_token($user_id) {
+    $user = get_userdata($user_id);
     $issued_at = time();
     $expiration_time = $issued_at + (DAY_IN_SECONDS * 7);
     $payload = [
@@ -115,6 +130,7 @@ class NextPressUserFlow {
       'exp' => $expiration_time,
       'user_id' => $user_id,
       'blog_id' => get_current_blog_id(),
+      'is_admin' => $user && in_array('administrator', $user->roles),
     ];
 
     $jwt = JWT::encode($payload, JWT_AUTH_SECRET_KEY, 'HS256');
