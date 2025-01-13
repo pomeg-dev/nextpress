@@ -245,6 +245,23 @@ $vwo
         ),
     ));
 
+$video_ask = new FieldsBuilder('video_ask');
+$video_ask
+    ->addTab("video_ask")
+    ->addTrueFalse("videoask_enabled", array(
+        'default_value' => 1,
+    ))
+    ->addText("videoask_url", array(
+        'conditional_logic' => array(
+            array(
+                array(
+                    'field' => 'videoask_enabled',
+                    'operator' => '==',
+                    'value' => '1',
+                ),
+            ),
+        ),
+    ));
 
 $page_404 = new FieldsBuilder('page_404');
 $page_404
@@ -292,6 +309,7 @@ $settings
     ->addFields($page_404)
     ->addFields($coming_soon)
     ->addFields($vwo)
+    ->addFields($video_ask)
     ->setLocation('options_page', '==', 'acf-options-settings')
     ->setGroupConfig('style', 'seamless');
 
