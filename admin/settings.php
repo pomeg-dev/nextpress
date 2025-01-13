@@ -227,6 +227,24 @@ $google_tag_manager
         ),
     ));
 
+$vwo = new FieldsBuilder('vwo');
+$vwo
+    ->addTab("vwo")
+    ->addTrueFalse("vwo_enabled", array(
+        'default_value' => 1,
+    ))
+    ->addText("vwo_account_id", array(
+        'conditional_logic' => array(
+            array(
+                array(
+                    'field' => 'vwo_enabled',
+                    'operator' => '==',
+                    'value' => '1',
+                ),
+            ),
+        ),
+    ));
+
 
 $page_404 = new FieldsBuilder('page_404');
 $page_404
@@ -273,6 +291,7 @@ $settings
     ->addFields($google_tag_manager)
     ->addFields($page_404)
     ->addFields($coming_soon)
+    ->addFields($vwo)
     ->setLocation('options_page', '==', 'acf-options-settings')
     ->setGroupConfig('style', 'seamless');
 
