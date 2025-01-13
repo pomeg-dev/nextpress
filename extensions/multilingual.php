@@ -22,7 +22,7 @@ class NextPressMLExtension
         $post_id = is_object($post) ? $post->ID : $post['id'];
         $hreflang[] = [
             "code" => $locale,
-            "href" => get_permalink($post_id),
+            "href" => str_replace(home_url(), get_nextpress_frontend_url(), get_permalink($post_id)),
         ];
         $related_sites = get_field('related_sites', 'option');
         if ($related_sites) {
@@ -45,9 +45,12 @@ class NextPressMLExtension
 
                 switch_to_blog($site_id);
                 $ml_locale = substr(get_blog_option($site_id, 'WPLANG'), 0, 2);
+                $ml_href = $ml_post_id ? get_permalink($ml_post_id) : home_url();
+                $ml_href = str_replace(home_url(), get_nextpress_frontend_url(), $ml_href);
+                
                 $hreflang[] = [
                     "code" => $ml_locale,
-                    "href" => $ml_post_id ? get_permalink($ml_post_id) : home_url(),
+                    "href" => $ml_href,
                 ];
                 restore_current_blog();
             }
