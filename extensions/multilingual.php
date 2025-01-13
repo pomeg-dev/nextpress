@@ -28,17 +28,33 @@ class NextPressMLExtension
         if ($related_sites) {
             foreach ($related_sites as $site_id) {
                 $site_id = str_replace('site_id_', '', $site_id);
+
+                // Get href for related post.
+                $ml_post_id = false;
+                if (class_exists('cty_cloner\Cloner_Relationship')) {
+                    $cloner    = new cty_cloner\Cloner_Relationship();
+                    $rel_array = $cloner->get_relationship( $post_id, get_current_blog_id() );
+                    if ($rel_array) {
+                        $relationship = $rel_array['relationship'];
+                        $key          = array_key_first( $relationship );
+                        if ( isset( $relationship[ $key ][ $site_id ] ) ) {
+                            $ml_post_id = $relationship[ $key ][ $site_id ];
+                        }
+                    }
+                }
+
                 switch_to_blog($site_id);
                 $ml_locale = substr(get_blog_option($site_id, 'WPLANG'), 0, 2);
                 $hreflang[] = [
                     "code" => $ml_locale,
-                    "href" => home_url(),
+                    "href" => $ml_post_id ? get_permalink($ml_post_id) : home_url(),
                 ];
                 restore_current_blog();
             }
             
             $post['hreflang'] = $hreflang;
         }
+
         return $post;
     }
 }
