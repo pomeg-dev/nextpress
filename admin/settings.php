@@ -263,6 +263,22 @@ $video_ask
         ),
     ));
 
+$all_sites = [];
+if (is_multisite()) {
+    $sites = get_sites();
+    foreach ($sites as $site) {
+        $all_sites['site_id_' . $site->blog_id] = get_blog_option($site->blog_id, 'blogname');
+    }
+}
+$multilingual = new FieldsBuilder('multilingual');
+$multilingual
+    ->addTab("multilingual")
+    ->addSelect("related_sites", [
+        'multiple' => 1,
+        'choices' => $all_sites,
+        'ui' => 1
+    ]);
+
 $page_404 = new FieldsBuilder('page_404');
 $page_404
     ->addTab("404")
@@ -310,6 +326,7 @@ $settings
     ->addFields($coming_soon)
     ->addFields($vwo)
     ->addFields($video_ask)
+    ->addFields($multilingual)
     ->setLocation('options_page', '==', 'acf-options-settings')
     ->setGroupConfig('style', 'seamless');
 
