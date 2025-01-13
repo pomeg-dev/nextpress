@@ -235,6 +235,18 @@ add_action('wp', 'refresh_nextpress_wp_cookie');
 function nextpress_redirect_frontend()
 {
     $fe_url = get_nextpress_frontend_url();
+
+    // Check for yoast redirects.
+    $redirects_json = get_option('wpseo-premium-redirects-base');
+    if ($redirects_json) {
+        foreach ($redirects_json as $redirect) {
+            if (strpos($_SERVER['REQUEST_URI'], $redirect['origin']) !== false) {
+                wp_redirect($fe_url . '/' . ltrim($redirect['url']), 301);
+                exit;
+            }
+        }
+    }
+
     //if multisite req, remove the blog url
     if (is_multisite()) {
         $path = get_blog_details()->path;
