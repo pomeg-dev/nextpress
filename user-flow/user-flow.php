@@ -107,12 +107,17 @@ class NextPressUserFlow {
     wp_set_auth_cookie($user->ID, true);
 
     // Generate a new JWT token.
-    $jwt_token = $this->generate_jwt_token($user->ID);
+    $jwt_token = $this->generate_jwt_token();
 
     $response = [
       'message' => __('User logged in successfully', 'nextpress'),
       'jwt_token' => $jwt_token,
       'success' => true,
+      'user_id' => $user->ID,
+      'user_display_name' => $user->display_name,
+      'user_email' => $user->user_email,
+      'blog_id' => get_current_blog_id(),
+      'is_admin' => $user && in_array('administrator', $user->roles),
     ];
     if ($referrer) {
       $response['referrer'] = $referrer;
@@ -120,17 +125,13 @@ class NextPressUserFlow {
     return new WP_REST_Response($response);
   }
 
-  private function generate_jwt_token($user_id) {
-    $user = get_userdata($user_id);
+  private function generate_jwt_token() {
     $issued_at = time();
     $expiration_time = $issued_at + (DAY_IN_SECONDS * 7);
     $payload = [
       'iss' => get_bloginfo('url'),
       'iat' => $issued_at,
       'exp' => $expiration_time,
-      'user_id' => $user_id,
-      'blog_id' => get_current_blog_id(),
-      'is_admin' => $user && in_array('administrator', $user->roles),
     ];
 
     $jwt = JWT::encode($payload, JWT_AUTH_SECRET_KEY, 'HS256');
