@@ -109,7 +109,7 @@ class NextPressUserFlow {
     wp_set_auth_cookie($user->ID, true);
 
     // Generate a new JWT token.
-    $jwt_token = $this->generate_jwt_token($user->ID);
+    $jwt_token = 'asd'; //$this->generate_jwt_token($user->ID);
 
     $response = [
       'message' => __('User logged in successfully', 'nextpress'),
