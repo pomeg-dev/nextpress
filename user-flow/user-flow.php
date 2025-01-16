@@ -55,6 +55,10 @@ class NextPressUserFlow {
 
   private function register_routes() {
     add_action('rest_api_init', function () {
+      register_rest_route('nextpress', '/logout', array(
+          'methods' => 'GET',
+          'callback' => [ $this, 'logout_callback' ],
+      ));
       register_rest_route('nextpress', '/login', array(
           'methods' => 'POST',
           'callback' => [ $this, 'login_callback' ],
@@ -73,6 +77,18 @@ class NextPressUserFlow {
           'permission_callback' => '__return_true',
       ));
     });
+  }
+
+  public function logout_callback() {
+    wp_logout();
+    wp_destroy_current_session();
+    wp_clear_auth_cookie();
+    wp_set_current_user(0);
+    $response = [
+      'message' => __('User logged out successfully', 'nextpress'),
+      'success' => true,
+    ];
+    return new WP_REST_Response($response);
   }
 
   public function login_callback(WP_REST_Request $request) {
@@ -101,10 +117,6 @@ class NextPressUserFlow {
         'success' => false,
       ]);
     }
-    
-    // Set WP cookies.
-    wp_set_current_user($user->ID);
-    wp_set_auth_cookie($user->ID, true);
 
     // Generate a new JWT token.
     $jwt_token = $this->generate_jwt_token();
@@ -117,6 +129,7 @@ class NextPressUserFlow {
       'user_display_name' => $user->display_name,
       'user_email' => $user->user_email,
       'blog_id' => get_current_blog_id(),
+      'blog_url' => get_bloginfo('url'),
       'is_admin' => $user && in_array('administrator', $user->roles),
     ];
     if ($referrer) {
