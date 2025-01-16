@@ -3,6 +3,7 @@
 defined('ABSPATH') or die('You do not have access to this file');
 
 use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 
 class NextPressUserFlow {
   public function __construct() {
@@ -23,34 +24,35 @@ class NextPressUserFlow {
 
     // Register routes.
     $this->register_routes();
+    add_action('login_init', [$this, 'redirect_login']);
+  }
 
-    // Redirect to register page.
-    add_action('login_init', function() {
-      $is_login_redirect = get_field('enable_login_redirect', 'option');
-      $register_page = get_field('register_page', 'option');
-      if (
-        $is_login_redirect && 
-        $register_page && 
-        strpos($_SERVER['REQUEST_URI'], 'wp-login.php?action=register') !== false
-      ) {
-        wp_redirect(get_permalink($register_page['id']));
+  public function redirect_login() {
+    // Function to auth JWT and redirect to admin from nextjs.
+    $redirect_to = isset($_GET['redirect_to']) ? $_GET['redirect_to'] : '';
+    if (strpos($redirect_to, 'token=') !== false) {
+      $url_parts = parse_url($redirect_to);
+      parse_str($url_parts['query'], $query_params);
+      $redirect_to = remove_query_arg('token', $redirect_to);
+      $token = $query_params['token'];
+
+      if (!$token) {
+        return;
+      }
+
+      try {
+        $decoded_token = JWT::decode($token, new Key(JWT_AUTH_SECRET_KEY, 'HS256'));
+        if (isset($decoded_token->user_id)) {
+          wp_set_auth_cookie($decoded_token->user_id);
+          wp_redirect($redirect_to);
+          exit;
+        }
+      } catch (Exception $e) {
+        error_log('Token verification failed: ' . $e->getMessage());
+        wp_redirect(home_url('/login'));
         exit;
       }
-    });
-
-    // Redirect to login page.
-    add_action('login_init', function() {
-      $is_login_redirect = get_field('enable_login_redirect', 'option');
-      $login_page = get_field('login_page', 'option');
-      if (
-        $is_login_redirect && 
-        $login_page && 
-        strpos($_SERVER['REQUEST_URI'], 'wp-login.php') !== false
-      ) {
-        wp_redirect(get_permalink($login_page['id']));
-        exit;
-      }
-    });
+    }
   }
 
   private function register_routes() {
@@ -58,18 +60,22 @@ class NextPressUserFlow {
       register_rest_route('nextpress', '/logout', array(
           'methods' => 'GET',
           'callback' => [ $this, 'logout_callback' ],
+          'permission_callback' => '__return_true'
       ));
       register_rest_route('nextpress', '/login', array(
           'methods' => 'POST',
           'callback' => [ $this, 'login_callback' ],
+          'permission_callback' => '__return_true'
       ));
       register_rest_route('nextpress', '/request-reset', array(
           'methods' => 'POST',
           'callback' => [ $this, 'forgot_password_callback' ],
+          'permission_callback' => '__return_true'
       ));
       register_rest_route('nextpress', '/reset-password', array(
           'methods' => 'POST',
           'callback' => [ $this, 'reset_password_callback' ],
+          'permission_callback' => '__return_true'
       ));
       register_rest_route('nextpress', '/register', array(
           'methods' => 'POST',
@@ -119,7 +125,7 @@ class NextPressUserFlow {
     }
 
     // Generate a new JWT token.
-    $jwt_token = $this->generate_jwt_token();
+    $jwt_token = $this->generate_jwt_token($user->ID);
 
     $response = [
       'message' => __('User logged in successfully', 'nextpress'),
@@ -138,13 +144,14 @@ class NextPressUserFlow {
     return new WP_REST_Response($response);
   }
 
-  private function generate_jwt_token() {
+  private function generate_jwt_token($user_id) {
     $issued_at = time();
     $expiration_time = $issued_at + (DAY_IN_SECONDS * 7);
     $payload = [
       'iss' => get_bloginfo('url'),
       'iat' => $issued_at,
       'exp' => $expiration_time,
+      'user_id' => $user_id,
     ];
 
     $jwt = JWT::encode($payload, JWT_AUTH_SECRET_KEY, 'HS256');
