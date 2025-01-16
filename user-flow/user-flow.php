@@ -98,7 +98,6 @@ class NextPressUserFlow {
   }
 
   public function login_callback(WP_REST_Request $request) {
-    $referrer = sanitize_text_field($request->get_param('referrer'));
     $user_login = sanitize_text_field($request->get_param('user_login'));
     $user_password = sanitize_text_field($request->get_param('user_password'));
     $remember = filter_var($request->get_param('remember'), FILTER_SANITIZE_NUMBER_INT);
@@ -138,9 +137,6 @@ class NextPressUserFlow {
       'blog_url' => get_bloginfo('url'),
       'is_admin' => $user && in_array('administrator', $user->roles),
     ];
-    if ($referrer) {
-      $response['referrer'] = $referrer;
-    }
     return new WP_REST_Response($response);
   }
 
