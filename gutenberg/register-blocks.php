@@ -766,7 +766,7 @@ add_filter('acf/load_field/name=current_post', function ($field) {
 // Ensure correct post object is returned for required fields.
 function format_next_post_object($value, $post_id, $field) {
     if (is_object($value)) {
-        $value = NextpressPostFormatter::format_post($value);
+        $value = NextpressPostFormatter::format_post($value, true);
     }
     return $value;
 }
