@@ -65,7 +65,7 @@ class NextpressApiRouter
             }
         }
 
-        if (!$post) return null;
+        if (!$post) return ['404' => true];
 
         return NextpressPostFormatter::format_post($post, true);
     }
