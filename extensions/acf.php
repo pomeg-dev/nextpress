@@ -21,6 +21,11 @@ class NextPressAcfExtension
     {
         if (!function_exists('get_fields')) return $post;
         $post['acf_data'] = get_fields(is_object($post) ? $post->ID : $post['id']);
+        foreach ($post['acf_data'] as $key => $value) {
+            if (is_string($value) && strpos($value, 'nav_id') !== false) {
+                $post['acf_data'][$key] = $this->replace_nav_id($value, true);
+            }
+        }
         return $post;
     }
 
@@ -45,7 +50,7 @@ class NextPressAcfExtension
 
 
     // //if you spot a value of {{nav_id-[id]}} in the block data, replace it with the actual menu object
-    public function replace_nav_id($block_data)
+    public function replace_nav_id($block_data, $replace = false)
     {
        // Stringiy block data and check if nav-id exists.
        $block_string = wp_json_encode($block_data);
@@ -54,7 +59,11 @@ class NextPressAcfExtension
        if ($matches) {
            foreach ($matches as $match) {
                $nav_id = $match[1];
-               $block_data['menus'][$nav_id] = wp_get_nav_menu_items($nav_id);
+               if ($replace) {
+                   return wp_get_nav_menu_items($nav_id);
+               } else {
+                   $block_data['menus'][$nav_id] = wp_get_nav_menu_items($nav_id);
+               }
            }
        }
        
