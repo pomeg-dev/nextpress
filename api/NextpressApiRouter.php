@@ -65,7 +65,7 @@ class NextpressApiRouter
             }
         }
 
-        if (!$post) return ['404' => true];
+        if (!$post) return apply_filters('np_post_not_found', ['404' => true]);
 
         return NextpressPostFormatter::format_post($post, true);
     }
