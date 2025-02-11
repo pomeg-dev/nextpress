@@ -135,7 +135,7 @@ class NextpressPostFormatter
         return array(
             'id' => $post_type->name,
             'name' => $post_type->labels->singular_name,
-            'slug' => $post_type->rewrite['slug'],
+            'slug' => $post_type->rewrite ? $post_type->rewrite['slug'] : '',
         );
     }
 

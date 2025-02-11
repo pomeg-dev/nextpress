@@ -18,6 +18,12 @@ defined('ABSPATH') or die('You do not have access to this file');
  * Includes
  *----------------------------------------------------------------------------*/
 require_once plugin_dir_path(__FILE__) . 'includes/acf-builder/autoload.php';
+if ( ! class_exists( 'Firebase\JWT\JWT' ) ) {
+    require_once plugin_dir_path( __FILE__ ) . 'includes/php-jwt/src/JWT.php';
+}
+if ( ! class_exists( 'Firebase\JWT\Key' ) ) {
+    require_once plugin_dir_path( __FILE__ ) . 'includes/php-jwt/src/Key.php';
+}
 
 
 /*----------------------------------------------------------------------------*
@@ -55,6 +61,13 @@ require_once plugin_dir_path(__FILE__) . 'extensions/acf.php';
 require_once plugin_dir_path(__FILE__) . 'extensions/yoast.php';
 require_once plugin_dir_path(__FILE__) . 'extensions/gravity-forms.php';
 require_once plugin_dir_path(__FILE__) . 'extensions/multilingual.php';
+
+
+/*----------------------------------------------------------------------------*
+* User Flow
+*----------------------------------------------------------------------------*/
+require_once plugin_dir_path(__FILE__) . 'user-flow/user-flow.php';
+
 
 class Nextpress
 {
@@ -190,49 +203,6 @@ add_filter(
     }
 );
 
-
-// Function to set the nextpress_wp cookie
-function set_nextpress_wp_cookie($user_login, $user)
-{
-    $blog_id = get_current_blog_id();
-    $wp_url = get_site_url($blog_id);
-    $post_id = get_the_ID(); // Get the current post ID
-    $edit_link = get_edit_post_link($post_id, 'raw'); // Get the edit link for the current post
-
-    $cookie_value = base64_encode(json_encode([
-        'blog_id' => $blog_id,
-        'wp_url' => $wp_url,
-        'edit_link' => $edit_link,
-        'user_id' => $user->ID
-    ]));
-
-    setcookie('nextpress_wp_' . $blog_id, $cookie_value, time() + (86400 * 30), '/', '', true, true); // Secure and HTTP only
-}
-add_action('wp_login', 'set_nextpress_wp_cookie', 10, 2);
-
-// Function to remove the nextpress_wp cookies on logout
-function remove_nextpress_wp_cookies()
-{
-    $cookie_prefix = 'nextpress_wp_';
-    foreach ($_COOKIE as $name => $value) {
-        if (strpos($name, $cookie_prefix) === 0) {
-            $blog_id = substr($name, strlen($cookie_prefix));
-            setcookie($name, '', time() - 3600, '/', '', true, true);
-        }
-    }
-}
-add_action('wp_logout', 'remove_nextpress_wp_cookies');
-
-// Refresh the nextpress_wp cookie on each page load for logged-in users
-function refresh_nextpress_wp_cookie()
-{
-    if (is_user_logged_in()) {
-        $user = wp_get_current_user();
-        set_nextpress_wp_cookie($user->user_login, $user);
-    }
-}
-add_action('wp', 'refresh_nextpress_wp_cookie');
-
 function nextpress_redirect_frontend()
 {
     $fe_url = get_nextpress_frontend_url();
@@ -276,3 +246,9 @@ function nextpress_edit_post_preview_link($link, WP_Post $post)
     return $draft_link;
 }
 add_filter('preview_post_link', 'nextpress_edit_post_preview_link', 10, 2);
+
+
+// DUMPER FUNCTION
+function np_dumper($variable) {
+    error_log('NP DUMP: ' . print_r($variable, true));
+}

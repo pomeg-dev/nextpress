@@ -64,7 +64,6 @@ class NextpressApiRouter
                 $post = !empty($post) ? $post[0] : null;
             }
         }
-        
 
         if (!$post) return apply_filters('np_post_not_found', ['404' => true]);
 
