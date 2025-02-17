@@ -21,6 +21,7 @@ class NextPressAcfExtension
     {
         if (!function_exists('get_fields')) return $post;
         $post['acf_data'] = get_fields(is_object($post) ? $post->ID : $post['id']);
+        if (!is_array($post['acf_data'])) return $post;
         foreach ($post['acf_data'] as $key => $value) {
             if (is_string($value) && strpos($value, 'nav_id') !== false) {
                 $post['acf_data'][$key] = $this->replace_nav_id_in_acf($value);

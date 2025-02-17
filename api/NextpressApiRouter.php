@@ -31,7 +31,11 @@ class NextpressApiRouter
         $page_for_posts_id = get_option('page_for_posts');
         $page_for_posts_url = get_permalink(get_option('page_for_posts'));
         $page_for_posts_path = trim(str_replace(site_url(), '', $page_for_posts_url), '/');
-        
+
+        if (strpos($path, '404') !== false) {
+            return apply_filters('np_post_not_found', ['404' => true]);
+        }
+
         if (!$path) {
             $post_id = $data->get_param('p') ?? $data->get_param('page_id');
             $post = $post_id ? get_post($post_id) : get_homepage();
@@ -67,6 +71,7 @@ class NextpressApiRouter
 
         if (!$post) return apply_filters('np_post_not_found', ['404' => true]);
 
-        return NextpressPostFormatter::format_post($post, true);
+        $formatted_post = NextpressPostFormatter::format_post($post, true);
+        return $formatted_post;
     }
 }
