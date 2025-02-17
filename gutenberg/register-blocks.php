@@ -463,7 +463,8 @@ function render_nextpress_block($block, $content = '', $is_preview = false, $pos
     $inner_blocks = get_field('inner_blocks');
 
     // Block Preview.
-    $is_preview = render_block_preview($post_id, $block, $inner_blocks);
+    // $is_preview = render_block_preview($post_id, $block, $inner_blocks);
+    $is_preview = false;
     if (!$is_preview) :
         ?>
         <div class="nextpress-block" style="border: 2px solid #007cba; padding: 20px; margin: 10px 0; background-color: #f0f0f1;">
