@@ -48,6 +48,7 @@ class NextpressApiTemplates
         $formatted_content = [];
 
         foreach ($flexible_content as $block) {
+            $block_data = isset($block['attrs']['data']) ? $block['attrs']['data'] : [];
             $formatted_block = [
                 'id' => uniqid('acf_'),
                 'blockName' => 'acf/' . $block['acf_fc_layout'],
@@ -61,7 +62,7 @@ class NextpressApiTemplates
                 ],
                 'parent' => 0,
                 'innerBlocks' => [],
-                'data' => apply_filters("np_block_data", $block['attrs']['data'], $block)
+                'data' => apply_filters("np_block_data", $block_data, $block)
             ];
 
             $formatted_content[] = $formatted_block;
