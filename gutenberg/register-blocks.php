@@ -457,14 +457,36 @@ function get_icon($block_name)
     return $icons[mt_rand(0, count($icons) - 1)];
 }
 
+function render_acf_preview($post_id, $block, $inner_blocks)
+{
+    $block_name = str_replace('acf/', '', $block['name']);
+    $attributes = !empty($block['data']) ? json_encode($block['data']) : '{}';
+    // $base_url = get_base_api_url();
+    $base_url = 'http://localhost:3000';
+    $fe_url = $base_url . '/block-preview';
+    $src = esc_url($fe_url . '?block=' . esc_attr($block_name) . '&attributes=' . urlencode($attributes));
+    echo '<iframe 
+        src="' . $src . '" 
+        width="100%" 
+        height="400" 
+        style="border:0;"></iframe>';
+
+    error_log(print_r('ACFBLOCK', true));
+    error_log(print_r($base_url, true));
+    error_log(print_r($src, true));
+    error_log(print_r($block_name, true));
+    // error_log(print_r($block, true));
+    return true;
+}
+
 function render_nextpress_block($block, $content = '', $is_preview = false, $post_id = 0)
 {
     $block_name = str_replace('acf/', '', $block['name']);
     $inner_blocks = get_field('inner_blocks');
 
     // Block Preview.
-    // $is_preview = render_block_preview($post_id, $block, $inner_blocks);
-    $is_preview = false;
+    $is_preview = render_block_preview($post_id, $block, $inner_blocks);
+    // $is_preview = render_acf_preview($post_id, $block, $inner_blocks);
     if (!$is_preview) :
         ?>
         <div class="nextpress-block" style="border: 2px solid #007cba; padding: 20px; margin: 10px 0; background-color: #f0f0f1;">
@@ -501,6 +523,7 @@ function render_nextpress_block($block, $content = '', $is_preview = false, $pos
 }
 
 function render_block_preview($post_id, $block, $inner_blocks) {
+    if (!wp_doing_ajax()) return false;
     if (get_post_status($post_id) !== 'publish') return false;
     $block_id = isset($block['anchor']) ? $block['anchor'] : $block['np_custom_id'];
     if (!$block_id) return false;
