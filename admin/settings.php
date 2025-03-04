@@ -227,6 +227,57 @@ $google_tag_manager
         ),
     ));
 
+$vwo = new FieldsBuilder('vwo');
+$vwo
+    ->addTab("vwo")
+    ->addTrueFalse("vwo_enabled", array(
+        'default_value' => 1,
+    ))
+    ->addText("vwo_account_id", array(
+        'conditional_logic' => array(
+            array(
+                array(
+                    'field' => 'vwo_enabled',
+                    'operator' => '==',
+                    'value' => '1',
+                ),
+            ),
+        ),
+    ));
+
+$video_ask = new FieldsBuilder('video_ask');
+$video_ask
+    ->addTab("video_ask")
+    ->addTrueFalse("videoask_enabled", array(
+        'default_value' => 1,
+    ))
+    ->addText("videoask_url", array(
+        'conditional_logic' => array(
+            array(
+                array(
+                    'field' => 'videoask_enabled',
+                    'operator' => '==',
+                    'value' => '1',
+                ),
+            ),
+        ),
+    ));
+
+$all_sites = [];
+if (is_multisite()) {
+    $sites = get_sites();
+    foreach ($sites as $site) {
+        $all_sites['site_id_' . $site->blog_id] = get_blog_option($site->blog_id, 'blogname');
+    }
+}
+$multilingual = new FieldsBuilder('multilingual');
+$multilingual
+    ->addTab("multilingual")
+    ->addSelect("related_sites", [
+        'multiple' => 1,
+        'choices' => $all_sites,
+        'ui' => 1
+    ]);
 
 $page_404 = new FieldsBuilder('page_404');
 $page_404
@@ -332,6 +383,9 @@ $settings
     ->addFields($google_tag_manager)
     ->addFields($page_404)
     ->addFields($coming_soon)
+    ->addFields($vwo)
+    ->addFields($video_ask)
+    ->addFields($multilingual)
     ->addFields($user_flow)
     ->setLocation('options_page', '==', 'acf-options-settings')
     ->setGroupConfig('style', 'seamless');

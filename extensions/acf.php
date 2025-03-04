@@ -13,7 +13,7 @@ class NextPressAcfExtension
     {
         add_filter("np_post_object", array($this, "include_acf_data"));
         add_filter("np_block_data", array($this, "reformat_block_data"), 10, 2);
-        add_filter("np_block_data", array($this, "replace_nav_id"), 10, 2);
+        add_filter("np_block_data", array($this, "replace_nav_id_in_block"), 10, 2);
         add_action('rest_api_init', array($this, 'featured_media_posts_api'));
     }
 
@@ -21,9 +21,10 @@ class NextPressAcfExtension
     {
         if (!function_exists('get_fields')) return $post;
         $post['acf_data'] = get_fields(is_object($post) ? $post->ID : $post['id']);
+        if (!is_array($post['acf_data'])) return $post;
         foreach ($post['acf_data'] as $key => $value) {
             if (is_string($value) && strpos($value, 'nav_id') !== false) {
-                $post['acf_data'][$key] = $this->replace_nav_id($value, true);
+                $post['acf_data'][$key] = $this->replace_nav_id_in_acf($value);
             }
         }
         return $post;
@@ -39,18 +40,8 @@ class NextPressAcfExtension
         return $block_data;
     }
 
-    // foreach ($blocks as &$block) {
-    //     if (!isset($block['attrs']['data'])) continue;
-    //     acf_setup_meta($block['attrs']['data'], $block['blockName'], true);
-    //     $fields = get_fields();
-    //     acf_reset_meta($block['blockName']);
-    //     $block['attrs']['data'] = $fields;
-    // }
-    // return $blocks;
-
-
     // //if you spot a value of {{nav_id-[id]}} in the block data, replace it with the actual menu object
-    public function replace_nav_id($block_data, $replace = false)
+    public function replace_nav_id_in_block($block_data, $block)
     {
        // Stringiy block data and check if nav-id exists.
        $block_string = wp_json_encode($block_data);
@@ -59,30 +50,29 @@ class NextPressAcfExtension
        if ($matches) {
            foreach ($matches as $match) {
                $nav_id = $match[1];
-               if ($replace) {
-                   return wp_get_nav_menu_items($nav_id);
-               } else {
-                   $block_data['menus'][$nav_id] = wp_get_nav_menu_items($nav_id);
-               }
+               if (!$nav_id) continue;
+               $block_data['menus'][$nav_id] = wp_get_nav_menu_items($nav_id);
            }
        }
        
        return $block_data;
     }
 
-
-    //     function get_menus()
-    // {
-    //     $menus = wp_get_nav_menus();
-    //     $menu_choices = array();  // Adding an empty option
-    //     //need to return ["$id" => "$name", ...]
-    //     foreach ($menus as $menu) {
-    //         $id = $menu->term_id;
-    //         $menu_choices["{{nav_id-$id}}"] = $menu->name;
-    //     }
-    //     return $menu_choices;
-    // }
-
+    // //if you spot a value of {{nav_id-[id]}} in the block data, replace it with the actual menu object
+    public function replace_nav_id_in_acf($block_data)
+    {
+       // Stringiy block data and check if nav-id exists.
+       $block_string = wp_json_encode($block_data);
+       $re = '/{{nav_id-(\d*)}}/m';
+       preg_match_all($re, $block_string, $matches, PREG_SET_ORDER, 0);
+       if ($matches) {
+           foreach ($matches as $match) {
+               $nav_id = $match[1];
+               if (!$nav_id) continue;
+               return wp_get_nav_menu_items($nav_id);
+           }
+       }
+    }
 
     public function edit_attachment_response($object, $field_name, $request)
     {

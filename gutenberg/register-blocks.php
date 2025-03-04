@@ -500,6 +500,7 @@ function render_nextpress_block($block, $content = '', $is_preview = false, $pos
 }
 
 function render_block_preview($post_id, $block, $inner_blocks) {
+    if (!wp_doing_ajax()) return false;
     if (get_post_status($post_id) !== 'publish') return false;
     $block_id = isset($block['anchor']) ? $block['anchor'] : $block['np_custom_id'];
     if (!$block_id) return false;
@@ -766,7 +767,8 @@ add_filter('acf/load_field/name=current_post', function ($field) {
 // Ensure correct post object is returned for required fields.
 function format_next_post_object($value, $post_id, $field) {
     if (is_object($value)) {
-        $value = NextpressPostFormatter::format_post($value, true);
+        $include_content = $field['name'] === 'current_post' ? false : true;
+        $value = NextpressPostFormatter::format_post($value, $include_content);
     }
     return $value;
 }

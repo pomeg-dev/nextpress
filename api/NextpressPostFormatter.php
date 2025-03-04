@@ -90,6 +90,7 @@ class NextpressPostFormatter
         $formatted_content = [];
 
         foreach ($flexible_content as $block) {
+            $block_data = isset($block['attrs']['data']) ? $block['attrs']['data'] : [];
             $formatted_block = [
                 'id' => uniqid('acf_'), // Generate a unique ID for ACF blocks
                 'blockName' => 'acf/' . $block['acf_fc_layout'],
@@ -104,7 +105,7 @@ class NextpressPostFormatter
                 'parent' => 0,
                 'innerBlocks' => [],
                 // 'data' => apply_filters("np_block_data", $block['attrs']),
-                'data' => apply_filters("np_block_data", $block['attrs']['data'], $block),
+                'data' => apply_filters("np_block_data", $block_data, $block),
             ];
 
             $formatted_content[] = $formatted_block;
@@ -135,7 +136,7 @@ class NextpressPostFormatter
         return array(
             'id' => $post_type->name,
             'name' => $post_type->labels->singular_name,
-            'slug' => $post_type->rewrite['slug'],
+            'slug' => $post_type->rewrite ? $post_type->rewrite['slug'] : '',
         );
     }
 
@@ -199,9 +200,12 @@ class NextpressPostFormatter
         });
 
         foreach ($blocks as $index => $block) {
-            $block_id = isset($block['attrs']['anchor']) ? 
-                $block['attrs']['anchor'] : 
-                $block['attrs']['np_custom_id'];
+            $block_data = isset($block['attrs']['data']) ? $block['attrs']['data'] : [];
+            $block_id = isset($block['attrs']['anchor']) 
+                ? $block['attrs']['anchor'] 
+                : (isset($block['attrs']['np_custom_id']) 
+                        ? $block['attrs']['np_custom_id']
+                        : $block['blockName']);
             $formatted_block = array(
                 'id' => $block_id,
                 'blockName' => $block['blockName'],
@@ -215,7 +219,7 @@ class NextpressPostFormatter
                 ),
                 'parent' => $parent,
                 'innerBlocks' => array(),
-                'data' => apply_filters("np_block_data", $block['attrs']['data'], $block),
+                'data' => apply_filters("np_block_data", $block_data, $block),
             );
 
             // Add custom classname.
