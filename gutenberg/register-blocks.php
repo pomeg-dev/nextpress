@@ -526,7 +526,7 @@ function render_block_preview($post_id, $block, $inner_blocks) {
 
     $block_div = $xpath->query("//div[@id='" . $block_id . "']")->item(0);
     if ($block_div) {
-        $block_html = '<div data-theme="' . $block['category'] . '">' . $dom->saveHTML($block_div) . '</div>';
+        $block_html = '<div data-theme="' . $block['category'] . '"><div class="wp-preview">' . $dom->saveHTML($block_div) . '</div></div>';
 
         // Inner Blocks.
         if ($inner_blocks) {
@@ -678,6 +678,12 @@ function handle_dom_preload($post_id, $load_styles = false)
             }
             .opacity-0 {
                 opacity: 1 !important;
+            }
+            .wp-block-group.has-text-color .wp-preview {
+                color: inherit;
+            }
+            .wp-block-group.has-background .wp-preview {
+                background-color: inherit;
             }
             <?php echo $combined_styles; ?>
         </style>
