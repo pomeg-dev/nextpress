@@ -612,25 +612,6 @@ function handle_dom_preload($post_id, $load_styles = false)
     $html = file_get_contents($fe_url);
     if (!$html) return;
 
-    // Remove default wp button styles.
-    echo '<script>
-        document.addEventListener("DOMContentLoaded", function() {
-            let styleSheets = document.styleSheets;
-            for (let sheet of styleSheets) {
-                try {
-                    let rules = sheet.cssRules || sheet.rules;
-                    for (let i = 0; i < rules.length; i++) {
-                        if (rules[i].selectorText && rules[i].selectorText.includes(".wp-core-ui .button")) {
-                            sheet.deleteRule(i); // Remove WP button styles
-                        }
-                    }
-                } catch (e) {
-                    console.error("Error modifying styles:", e);
-                }
-            }
-        });
-    </script>';
-
     // Load DOM.
     $dom = new DOMDocument();
     @$dom->loadHTML($html);
@@ -744,12 +725,38 @@ function reload_frontend_page($post_id)
     handle_dom_preload($post_id);
 }
 
+function remove_wp_buttons()
+{
+    $screen = get_current_screen();
+    if ($screen->base === 'post' && isset($_GET['post'])) {
+        echo '<script>
+            document.addEventListener("DOMContentLoaded", function() {
+                let styleSheets = document.styleSheets;
+                for (let sheet of styleSheets) {
+                    try {
+                        let rules = sheet.cssRules || sheet.rules;
+                        for (let i = 0; i < rules.length; i++) {
+                            if (rules[i].selectorText && rules[i].selectorText.includes(".wp-core-ui .button")) {
+                                sheet.deleteRule(i); // Remove WP button styles
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Error modifying styles:", e);
+                    }
+                }
+            });
+        </script>';
+    }
+}
+
 // Initialize the block registration
 add_action('after_setup_theme', 'register_nextpress_blocks');
 
 // Setup DOMDocument and inject frontend styles.
 add_action('admin_head', 'preload_frontend_page');
 
+// Remove WP buttons from preview.
+add_action('admin_head', 'remove_wp_buttons');
 
 // Refetch DOMDocument on post save.
 add_action( 'save_post', 'reload_frontend_page');
