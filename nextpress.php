@@ -18,11 +18,11 @@ defined('ABSPATH') or die('You do not have access to this file');
  * Includes
  *----------------------------------------------------------------------------*/
 require_once plugin_dir_path(__FILE__) . 'includes/acf-builder/autoload.php';
-if ( ! class_exists( 'Firebase\JWT\JWT' ) ) {
-    require_once plugin_dir_path( __FILE__ ) . 'includes/php-jwt/src/JWT.php';
+if (! class_exists('Firebase\JWT\JWT')) {
+    require_once plugin_dir_path(__FILE__) . 'includes/php-jwt/src/JWT.php';
 }
-if ( ! class_exists( 'Firebase\JWT\Key' ) ) {
-    require_once plugin_dir_path( __FILE__ ) . 'includes/php-jwt/src/Key.php';
+if (! class_exists('Firebase\JWT\Key')) {
+    require_once plugin_dir_path(__FILE__) . 'includes/php-jwt/src/Key.php';
 }
 
 
@@ -67,6 +67,12 @@ require_once plugin_dir_path(__FILE__) . 'extensions/multilingual.php';
 * User Flow
 *----------------------------------------------------------------------------*/
 require_once plugin_dir_path(__FILE__) . 'user-flow/user-flow.php';
+
+
+/*----------------------------------------------------------------------------*
+* Options
+*----------------------------------------------------------------------------*/
+require_once plugin_dir_path(__FILE__) . 'options/options.php';
 
 
 class Nextpress
@@ -249,6 +255,7 @@ add_filter('preview_post_link', 'nextpress_edit_post_preview_link', 10, 2);
 
 
 // DUMPER FUNCTION
-function np_dumper($variable) {
+function np_dumper($variable)
+{
     error_log('NP DUMP: ' . print_r($variable, true));
 }

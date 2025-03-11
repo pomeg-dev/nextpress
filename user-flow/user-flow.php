@@ -89,12 +89,12 @@ class NextPressUserFlow
         'callback' => [$this, 'register_callback'],
         'permission_callback' => '__return_true',
       ));
-      register_rest_route('nextpress', '/get-meta/(?P<user_id>\d+)/(?P<meta_key>[a-zA-Z0-9_-]+)', array(
+      register_rest_route('nextpress', '/get-user-meta/(?P<user_id>\d+)(?:/(?P<meta_key>[a-zA-Z0-9_-]+))?', array(
         'methods' => 'GET',
         'callback' => [$this, 'get_meta_callback'],
         'permission_callback' => '__return_true',
       ));
-      register_rest_route('nextpress', '/save-meta', array(
+      register_rest_route('nextpress', '/save-user-meta', array(
         'methods' => 'POST',
         'callback' => [$this, 'save_meta_callback'],
         'permission_callback' => '__return_true',
@@ -308,10 +308,18 @@ class NextPressUserFlow
     $user_id = $request->get_param('user_id');
     $meta_key = $request->get_param('meta_key');
 
-    if (!$user_id || !$meta_key) {
+    if (!$user_id) {
       return new WP_REST_Response([
         'message' => __('Invalid request data', 'nextpress'),
         'success' => false,
+      ]);
+    }
+
+    if (!$meta_key) {
+      $meta_value = get_user_meta($user_id, '', true);
+      return new WP_REST_Response([
+        'metaValue' => $meta_value,
+        'success' => true,
       ]);
     }
 
