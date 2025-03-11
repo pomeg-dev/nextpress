@@ -808,3 +808,4 @@ function format_next_post_object($value, $post_id, $field) {
 add_filter('acf/format_value/name=current_post', 'format_next_post_object', 10, 3);
 add_filter('acf/format_value/name=login_page', 'format_next_post_object', 10, 3);
 add_filter('acf/format_value/name=register_page', 'format_next_post_object', 10, 3);
+add_filter('acf/format_value/name=rest_post', 'format_next_post_object', 10, 3);
