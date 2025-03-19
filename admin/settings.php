@@ -391,11 +391,9 @@ $settings
     ->setGroupConfig('style', 'seamless');
 
 add_action('acf/init', function () use ($settings) {
+    apply_filters('np_acf_settings_filter', $settings);
     acf_add_local_field_group($settings->build());
 });
-
-
-
 
 function mytheme_setup_theme_supported_features()
 {
@@ -422,5 +420,4 @@ function mytheme_setup_theme_supported_features()
         ),
     ));
 }
-
 add_action('after_setup_theme', 'mytheme_setup_theme_supported_features');
