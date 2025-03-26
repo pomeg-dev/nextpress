@@ -1,72 +1,86 @@
 <?php
-
 /**
- * @package Nextpress
+ * Plugin Name: Nextpress
+ * Plugin URI: https://pomegranate.co.uk
+ * Description: Nextpress is a WordPress plugin that allows you to use Next.js with WordPress as a headless CMS.
+ * Author: Pomegranate
+ * Version: 2.0
+ * Text Domain: nextpress
+ * @package nextpress
  */
 
-/*
-Plugin Name: Nextpress
-Plugin URI: 
-Description: Nextpress is a WordPress plugin that allows you to use Next.js with WordPress as a headless CMS.
-Version: 0.7
-*/
+namespace nextpress;
 
 defined('ABSPATH') or die('You do not have access to this file');
 
+// Base filepath and URL constants, without a trailing slash.
+define( 'NEXTPRESS_PATH', untrailingslashit( plugin_dir_path( __FILE__ ) ) );
+define( 'NEXTPRESS_URI', plugins_url( plugin_basename( __DIR__ ) ) );
 
-/*----------------------------------------------------------------------------*
- * Includes
- *----------------------------------------------------------------------------*/
-require_once plugin_dir_path(__FILE__) . 'includes/acf-builder/autoload.php';
-if ( ! class_exists( 'Firebase\JWT\JWT' ) ) {
-    require_once plugin_dir_path( __FILE__ ) . 'includes/php-jwt/src/JWT.php';
+/**
+ * 'spl_autoload_register' callback function.
+ * Autoloads all the required plugin classes, found in the /class/ directory (relative to the plugin's root).
+ *
+ * @param string $class The name of the class being instantiated inculding its namespaces.
+ */
+function autoloader($class) {
+    // $class returns the classname including any namespaces
+    $raw_class = explode('\\', $class);
+    $filename = str_replace('_', '-', strtolower(end($raw_class)));
+    $base_dir = __DIR__ . '/class/';
+    $found = false;
+    
+    // First check if the file exists directly in the class directory
+    $direct_filepath = $base_dir . $filename . '.php';
+    if (file_exists($direct_filepath)) {
+        include_once $direct_filepath;
+        $found = true;
+    } else {
+        // If not found, check each subdirectory
+        if (is_dir($base_dir)) {
+            $subdirs = glob($base_dir . '*', GLOB_ONLYDIR);
+            foreach ($subdirs as $dir) {
+                $filepath = $dir . '/' . $filename . '.php';
+                if (file_exists($filepath)) {
+                    include_once $filepath;
+                    $found = true;
+                    break;
+                }
+            }
+        }
+    }
+    return $found;
 }
-if ( ! class_exists( 'Firebase\JWT\Key' ) ) {
-    require_once plugin_dir_path( __FILE__ ) . 'includes/php-jwt/src/Key.php';
-}
+spl_autoload_register(__NAMESPACE__ . '\autoloader');
 
+/**
+ * Initialise
+ */
+new Init();
 
 /*----------------------------------------------------------------------------*
  * Gutenberg
  *----------------------------------------------------------------------------*/
-require_once plugin_dir_path(__FILE__) . 'gutenberg/register-blocks.php';
-
-/*----------------------------------------------------------------------------*
- * Plugin WP-Admin Settings
- *----------------------------------------------------------------------------*/
-require_once plugin_dir_path(__FILE__) . 'admin/admin-menu.php';
-require_once plugin_dir_path(__FILE__) . 'admin/settings.php';
-require_once plugin_dir_path(__FILE__) . 'admin/templates.php';
-require_once plugin_dir_path(__FILE__) . 'admin/deploy.php';
-
-
-
+// require_once plugin_dir_path(__FILE__) . 'gutenberg/register-blocks.php';
 
 /*----------------------------------------------------------------------------*
  * API
  *----------------------------------------------------------------------------*/
-require_once plugin_dir_path(__FILE__) . 'api/helpers.php';
-require_once plugin_dir_path(__FILE__) . 'api/NextpressApiRouter.php';
-require_once plugin_dir_path(__FILE__) . 'api/NextpressApiSettings.php';
-require_once plugin_dir_path(__FILE__) . 'api/NextpressApiPosts.php';
-require_once plugin_dir_path(__FILE__) . 'api/NextpressApiTheme.php';
-require_once plugin_dir_path(__FILE__) . 'api/NextpressApiMenus.php';
-require_once plugin_dir_path(__FILE__) . 'api/NextpressApiTemplates.php';
-
+// require_once plugin_dir_path(__FILE__) . 'api/helpers.php';
+// require_once plugin_dir_path(__FILE__) . 'api/NextpressApiRouter.php';
+// require_once plugin_dir_path(__FILE__) . 'api/NextpressApiSettings.php';
+// require_once plugin_dir_path(__FILE__) . 'api/NextpressApiPosts.php';
+// require_once plugin_dir_path(__FILE__) . 'api/NextpressApiTheme.php';
+// require_once plugin_dir_path(__FILE__) . 'api/NextpressApiMenus.php';
+// require_once plugin_dir_path(__FILE__) . 'api/NextpressApiTemplates.php';
 
 /*----------------------------------------------------------------------------*
  * Extensions
  *----------------------------------------------------------------------------*/
-require_once plugin_dir_path(__FILE__) . 'extensions/acf.php';
-require_once plugin_dir_path(__FILE__) . 'extensions/yoast.php';
-require_once plugin_dir_path(__FILE__) . 'extensions/gravity-forms.php';
-require_once plugin_dir_path(__FILE__) . 'extensions/multilingual.php';
-
-
-/*----------------------------------------------------------------------------*
-* User Flow
-*----------------------------------------------------------------------------*/
-require_once plugin_dir_path(__FILE__) . 'user-flow/user-flow.php';
+// require_once plugin_dir_path(__FILE__) . 'extensions/acf.php';
+// require_once plugin_dir_path(__FILE__) . 'extensions/yoast.php';
+// require_once plugin_dir_path(__FILE__) . 'extensions/gravity-forms.php';
+// require_once plugin_dir_path(__FILE__) . 'extensions/multilingual.php';
 
 
 class Nextpress
@@ -74,11 +88,7 @@ class Nextpress
 
     public function __construct()
     {
-
-        // Stop crons on uninstall
-        register_deactivation_hook(__FILE__, array($this, 'deactivate_scheduled_cron'));
-
-        $this->_init();
+        // $this->_init();
     }
 
     private function _init()
@@ -92,30 +102,14 @@ class Nextpress
 
         $this->plugin_update_checker();
     }
-
-    public function plugin_update_checker()
-    {
-        // PLUGIN UPDATE CHECKER
-        require 'plugin-update-checker/plugin-update-checker.php';
-        $myUpdateChecker = Puc_v4_Factory::buildUpdateChecker(
-            'https://github.com/pomeg-dev/nextpress',
-            __FILE__,
-            'nextpress'
-        );
-        //Optional: If you're using a private repository, specify the access token like this:
-        $myUpdateChecker->setAuthentication('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');
-
-        //Optional: Set the branch that contains the stable release.
-        // $myUpdateChecker->setBranch('stable-branch-name');
-    }
 }
 
 
-new Nextpress;
+// new Nextpress;
 
 
 //if fetch_blocks_from_api function is not returning anything, DISABEL all editign ont he site and show message
-add_action('init', 'disable_editing_if_no_blocks');
+// add_action('init', 'disable_editing_if_no_blocks');
 function disable_editing_if_no_blocks()
 {
     $blocks = fetch_blocks_from_api();
@@ -176,32 +170,32 @@ function no_blocks_notice()
 }
 
 
-add_filter(
-    'acf/pre_save_block',
-    function ($attributes) {
+// add_filter(
+//     'acf/pre_save_block',
+//     function ($attributes) {
 
-        //error_log('attributes');
-        // error_log(print_r($attributes, true));
+//         //error_log('attributes');
+//         // error_log(print_r($attributes, true));
 
-        // if ( empty( $attributes['np_custom_id'] ) ) {
-        //     $attributes['np_custom_id'] = 'np_custom_id-' . uniqid();
-        // }
+//         // if ( empty( $attributes['np_custom_id'] ) ) {
+//         //     $attributes['np_custom_id'] = 'np_custom_id-' . uniqid();
+//         // }
 
-        if (!$attributes['np_custom_id']) {
-            $attributes['np_custom_id'] = uniqid();
-        }
+//         if (!$attributes['np_custom_id']) {
+//             $attributes['np_custom_id'] = uniqid();
+//         }
 
-        if (empty($attributes['anchor'])) {
-            $attributes['anchor'] = 'block-' . uniqid();
-        }
+//         if (empty($attributes['anchor'])) {
+//             $attributes['anchor'] = 'block-' . uniqid();
+//         }
 
-        // if ( empty( $attributes['data']['np_custom_id'] ) ) {
-        //     $attributes['data']['np_custom_id'] = 'np_custom_id-' . uniqid();
-        // }
+//         // if ( empty( $attributes['data']['np_custom_id'] ) ) {
+//         //     $attributes['data']['np_custom_id'] = 'np_custom_id-' . uniqid();
+//         // }
 
-        return $attributes;
-    }
-);
+//         return $attributes;
+//     }
+// );
 
 function nextpress_redirect_frontend()
 {
@@ -237,7 +231,7 @@ function nextpress_redirect_frontend()
         exit;
     }
 }
-add_action('template_redirect', 'nextpress_redirect_frontend', 10, 1);
+// add_action('template_redirect', 'nextpress_redirect_frontend', 10, 1);
 
 function nextpress_edit_post_preview_link($link, WP_Post $post)
 {
@@ -245,7 +239,7 @@ function nextpress_edit_post_preview_link($link, WP_Post $post)
     $draft_link =  $fe_url . "/api/draft?secret=<token>&id=" . $post->ID;
     return $draft_link;
 }
-add_filter('preview_post_link', 'nextpress_edit_post_preview_link', 10, 2);
+// add_filter('preview_post_link', 'nextpress_edit_post_preview_link', 10, 2);
 
 
 // DUMPER FUNCTION
