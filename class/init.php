@@ -34,9 +34,17 @@ class Init {
 		new Register_Blocks( $this->helpers );
 
 		// Register API routes
-		new Router( $this->helpers );
-		new Posts( $this->helpers );
-		// Add extensions acf, yoast, gforms, multilingual
+		new API_Router( $this->helpers );
+		new API_Settings( $this->helpers );
+		new API_Posts( $this->helpers );
+		new API_Menus( $this->helpers );
+		new API_Theme( $this->helpers );
+
+		// Add extensions
+		new Ext_ACF();
+		new Ext_Yoast();
+		new Ext_GravityForms();
+		// TODO: multilingual
 
 		// Add revalidators
 

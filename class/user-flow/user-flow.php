@@ -193,7 +193,7 @@ class User_Flow {
       'message' => __('User logged out successfully', 'nextpress'),
       'success' => true,
     ];
-    return new WP_REST_Response($response);
+    return new \WP_REST_Response($response);
   }
 
   public function login_callback(WP_REST_Request $request) {
@@ -202,7 +202,7 @@ class User_Flow {
     $remember = filter_var($request->get_param('remember'), FILTER_SANITIZE_NUMBER_INT);
 
     if (!$user_login || !$user_password) {
-      return new WP_REST_Response([
+      return new \WP_REST_Response([
         'message' => __('All fields are required', 'nextpress'),
         'success' => false,
       ]);
@@ -216,7 +216,7 @@ class User_Flow {
 
     $user = wp_signon($credentials, is_ssl());
     if (is_wp_error($user)) {
-      return new WP_REST_Response([
+      return new \WP_REST_Response([
         'message' => $user->get_error_message(),
         'success' => false,
       ]);
@@ -236,7 +236,7 @@ class User_Flow {
       'blog_url' => get_bloginfo('url'),
       'is_admin' => $user && in_array('administrator', $user->roles),
     ];
-    return new WP_REST_Response($response);
+    return new \WP_REST_Response($response);
   }
 
   private function generate_jwt_token($user_id) {
@@ -257,7 +257,7 @@ class User_Flow {
     $email = sanitize_email($request->get_param('email'));
 
     if (!$email) {
-      return new WP_REST_Response([
+      return new \WP_REST_Response([
         'message' => __('Email is required', 'nextpress'),
         'success' => false,
       ]);
@@ -269,7 +269,7 @@ class User_Flow {
     }
 
     if (!$user) {
-      return new WP_REST_Response([
+      return new \WP_REST_Response([
         'message' => __('User not found', 'nextpress'),
         'success' => false,
       ]);
@@ -286,7 +286,7 @@ class User_Flow {
     $message = "Hello, \n\nYou can reset your password by clicking on the following link: $reset_url";
     wp_mail($user->user_email, $subject, $message);
 
-    return new WP_REST_Response([
+    return new \WP_REST_Response([
       'message' => __('Reset link sent, please check your email', 'nextpress'),
       'success' => true,
     ]);
@@ -298,7 +298,7 @@ class User_Flow {
     $password = sanitize_text_field($request->get_param('password'));
 
     if (!$reset_key || !$login || !$password) {
-      return new WP_REST_Response([
+      return new \WP_REST_Response([
         'message' => __('Reset link invalid, please try again', 'nextpress'),
         'success' => false,
       ]);
@@ -306,14 +306,14 @@ class User_Flow {
 
     $user = check_password_reset_key($reset_key, $login);
     if (is_wp_error($user)) {
-      return new WP_REST_Response([
+      return new \WP_REST_Response([
         'message' => $user->get_error_message(),
         'success' => false,
       ]);
     }
 
     reset_password($user, $password);
-    return new WP_REST_Response([
+    return new \WP_REST_Response([
       'message' => __('Password reset successfully', 'nextpress'),
       'success' => true,
     ]);
@@ -321,7 +321,7 @@ class User_Flow {
 
   public function register_callback(WP_REST_Request $request) {
     if (!get_option('users_can_register')) {
-      return new WP_REST_Response([
+      return new \WP_REST_Response([
         'message' => __('Registration is closed.', 'nextpress'),
         'success' => false,
       ]);
@@ -332,7 +332,7 @@ class User_Flow {
     $password = sanitize_text_field($request->get_param('password'));
 
     if (!$username || !$email || !$password) {
-      return new WP_REST_Response([
+      return new \WP_REST_Response([
         'message' => __('All fields are required.', 'nextpress'),
         'success' => false,
       ]);
@@ -340,7 +340,7 @@ class User_Flow {
 
     // Check if already exists.
     if (email_exists($email)) {
-      return new WP_REST_Response([
+      return new \WP_REST_Response([
         'message' => __('User is already registered.', 'nextpress'),
         'success' => false,
       ]);
@@ -350,7 +350,7 @@ class User_Flow {
     $domain_whitelist = get_field('email_domain_whitelist', 'option');
     $domains = explode("\n", $domain_whitelist);
     if (!$domain_whitelist || !in_array(explode('@', $email)[1], $domains)) {
-      return new WP_REST_Response([
+      return new \WP_REST_Response([
         'message' => __('Email domain is not allowed.', 'nextpress'),
         'success' => false,
       ]);
@@ -358,7 +358,7 @@ class User_Flow {
 
     $user_id = wp_create_user($username, $password, $email);
     if (is_wp_error($user_id)) {
-      return new WP_REST_Response([
+      return new \WP_REST_Response([
         'message' => $user->get_error_message(),
         'success' => false,
       ]);
@@ -372,7 +372,7 @@ class User_Flow {
     $message = "Hello, \n\nYou can now login by clicking on the following link: $redirect_link";
     wp_mail($email, $subject, $message);
 
-    return new WP_REST_Response([
+    return new \WP_REST_Response([
       'message' => __('User registered successfully, check your inbox for further instructions.', 'nextpress'),
       'success' => true,
       'redirect' => $redirect_link,

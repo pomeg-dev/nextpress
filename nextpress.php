@@ -170,33 +170,6 @@ function no_blocks_notice()
 }
 
 
-// add_filter(
-//     'acf/pre_save_block',
-//     function ($attributes) {
-
-//         //error_log('attributes');
-//         // error_log(print_r($attributes, true));
-
-//         // if ( empty( $attributes['np_custom_id'] ) ) {
-//         //     $attributes['np_custom_id'] = 'np_custom_id-' . uniqid();
-//         // }
-
-//         if (!$attributes['np_custom_id']) {
-//             $attributes['np_custom_id'] = uniqid();
-//         }
-
-//         if (empty($attributes['anchor'])) {
-//             $attributes['anchor'] = 'block-' . uniqid();
-//         }
-
-//         // if ( empty( $attributes['data']['np_custom_id'] ) ) {
-//         //     $attributes['data']['np_custom_id'] = 'np_custom_id-' . uniqid();
-//         // }
-
-//         return $attributes;
-//     }
-// );
-
 function nextpress_redirect_frontend()
 {
     $fe_url = get_nextpress_frontend_url();

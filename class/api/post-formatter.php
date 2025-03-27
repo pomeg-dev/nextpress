@@ -2,8 +2,6 @@
 /**
  * Post formatter class
  * Formats WP post objects for consumption by nextjs
- * 
- * TODO: no_custom_id vs nextpress_id
  *
  * @package nextpress
  */
@@ -46,7 +44,7 @@ class Post_Formatter {
     $formatted_post = $this->include_breadcrumbs( $formatted_post );
     $formatted_post = $this->return_post_revision_for_preview( $formatted_post );
 
-    return apply_filters( 'np_post_object', $formatted_post );
+    return apply_filters( 'nextpress_post_object', $formatted_post );
   }
 
   private function get_slug( $post ) {
@@ -147,7 +145,7 @@ class Post_Formatter {
     ];
   }
 
-  private function format_flexible_content( $flexible_content ) {
+  public function format_flexible_content( $flexible_content ) {
     if ( ! is_array( $flexible_content ) ) {
       return [];
     }
@@ -172,7 +170,7 @@ class Post_Formatter {
         ],
         'parent' => 0,
         'innerBlocks' => [],
-        'data' => apply_filters( "np_block_data", $block_data, $block ),
+        'data' => apply_filters( 'nextpress_block_data', $block_data, $block ),
       ];
 
       $formatted_content[] = $formatted_block;
@@ -220,7 +218,7 @@ class Post_Formatter {
         ],
         'parent' => $parent,
         'innerBlocks' => [],
-        'data' => apply_filters( "np_block_data", $block_data, $block ),
+        'data' => apply_filters( 'nextpress_block_data', $block_data, $block ),
       ];
 
       // Add custom classname.
@@ -278,7 +276,7 @@ class Post_Formatter {
       'public'   => true,
       '_builtin' => false
     ];
-    $taxonomies = get_taxonomies( $args );
+    $taxonomies = get_taxonomies( $tax_args );
     $custom_taxonomies = array_filter( $taxonomies, function( $taxonomy ) {
       return ! in_array( $taxonomy, ['category', 'post_tag'] );
     });
