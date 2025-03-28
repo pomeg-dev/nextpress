@@ -20,12 +20,18 @@ class Register_Blocks {
   public $helpers;
 
   /**
+   * Post formatter.
+   */
+  public $formatter;
+
+  /**
    * ACF field builder.
    */
   public $field_builder;
 
   public function __construct( $helpers ) {
     $this->helpers = $helpers;
+    $this->formatter = new Post_Formatter();
     $this->field_builder = new Field_Builder();
 
     // Register blocks.
@@ -84,37 +90,131 @@ class Register_Blocks {
 
   /**
    * Render block callback
-   * TODO: block preview
+   * Requests nextjs /block-preview route in an iframe
    */
   public function render_nextpress_block( $block, $content = '', $is_preview = false, $post_id = 0 ) {
-    $block_name = str_replace( 'acf/', '', $block['name'] );
-    $inner_blocks = get_field( 'inner_blocks' );
+    $block_name = str_replace('acf/', '', $block['name']);
+    $inner_blocks = get_field('inner_blocks');
 
+    $block_html = $this->convert_acf_block_to_string( $block );
+    $block_html = $this->formatter->parse_block_data( $block_html );
+    $block_prefix = isset( $block_html[0]['slug'] ) 
+      ? 'field_' . str_replace( 'acf-', '', $block_html[0]['slug'] ) . '-block_'
+      : '';
+    $block_html = wp_json_encode( $block_html );
+    if ( $block_prefix ) {
+      $block_html = str_replace( $block_prefix, '', $block_html );
+    }
+    $encoded_content = base64_encode( $block_html );
+    $frontend_url = $this->helpers->frontend_url;
+    $iframe_id = 'block_preview_' . $block['id'];
+
+    echo "<iframe id='{$iframe_id}' src='{$frontend_url}/block-preview?post_id={$post_id}&content={$encoded_content}' width='100%' height='400px' style='pointer-events:none;'></iframe>";
+
+    // Add the resize script.
     ?>
-      <div class="nextpress-block" style="border: 2px solid #007cba; padding: 20px; margin: 10px 0; background-color: #f0f0f1;">
-        <h3 style="margin-top: 0; color: #007cba;">Block: <?php echo ucfirst( str_replace( '-', ' ', $block_name ) ); ?></h3>
+    <script>
+      (function() {
+        var iframeId = '<?php echo $iframe_id; ?>';
+        function setupMessageListener() {
+          var iframe = document.getElementById(iframeId);
+          if (!iframe) {
+            setTimeout(setupMessageListener, 100);
+            return;
+          }
+          
+          function handleMessage(event) {
+            if (event.data && event.data.type === 'blockPreviewHeight') {
+              var iframe = document.getElementById(iframeId);
+              if (iframe) {
+                var newHeight = event.data.height + 20;
+                iframe.style.height = newHeight + 'px';
+                console.log('Adjusted ' + iframeId + ' height to: ' + newHeight + 'px');
+              }
+            }
+          }
+          
+          window.removeEventListener('message', handleMessage);
+          window.addEventListener('message', handleMessage);
+          console.log('Message listener set up for iframe: ' + iframeId);
+        }
+        
+        setupMessageListener();
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', setupMessageListener);
+        }
 
-        <?php
-        $block_template = [
+        if (window.wp && window.wp.data) {
+          wp.data.subscribe(function() {
+            setupMessageListener();
+          });
+        }
+      })();
+    </script>
+
+    <div class="nextpress-block" style="border: 2px solid #007cba; padding: 10px; margin: 0 0 10px; background-color: #f0f0f1;">
+      <h4 style="margin: 0; color: #007cba;">Block: <?php echo ucfirst( str_replace( '-', ' ', $block_name ) ); ?></h4>
+
+      <?php
+      $block_template = [
+        [
+          'core/paragraph',
           [
-            'core/paragraph',
-            [
-              'placeholder' => __( 'Type / to choose a block', 'luna' ),
-            ],
+            'placeholder' => __( 'Type / to choose a block', 'luna' ),
           ],
-        ];
-        $allowed_blocks = $inner_blocks ?? [];
-        if ($inner_blocks) :
-          ?>
-          <InnerBlocks
-            template="<?php echo esc_attr( wp_json_encode( $block_template ) ); ?>"
-            allowedBlocks="<?php echo esc_attr( wp_json_encode( $allowed_blocks ) ); ?>"
-          />
-          <?php
-        endif;
+        ],
+      ];
+      $allowed_blocks = $inner_blocks ?? [];
+      if ( ! empty( $inner_blocks ) ) :
         ?>
-      </div>
+        <InnerBlocks
+          template="<?php echo esc_attr( wp_json_encode( $block_template ) ); ?>"
+          allowedBlocks="<?php echo esc_attr( wp_json_encode( $allowed_blocks ) ); ?>"
+        />
+        <?php
+      endif;
+      ?>
+    </div>
     <?php
+  }
+
+  public function convert_acf_block_to_string($block) {
+    // Extract the essential components
+    $name = $block['name'];
+    $data = isset($block['data']) ? $block['data'] : [];
+    $mode = isset($block['mode']) ? $block['mode'] : '';
+    $align = isset($block['align']) ? $block['align'] : '';
+    $anchor = isset($block['anchor']) ? $block['anchor'] : '';
+    
+    // Build the attributes object
+    $attributes = [
+        'name' => $name,
+        'data' => $data
+    ];
+    
+    // Add optional attributes if they exist
+    if (!empty($mode)) {
+        $attributes['mode'] = $mode;
+    }
+    
+    if (!empty($align)) {
+        $attributes['align'] = $align;
+    }
+    
+    if (!empty($anchor)) {
+        $attributes['anchor'] = $anchor;
+    }
+    
+    // Convert the attributes to JSON and escape unicode properly
+    $json_attributes = json_encode($attributes, JSON_UNESCAPED_SLASHES);
+    
+    // Replace unicode escaping with WordPress style escaping
+    $json_attributes = str_replace('--', '\u002d\u002d', $json_attributes);
+    
+    // Create the final block string
+    $block_string = "<!-- wp:{$name} {$json_attributes} /-->";
+    
+    return $block_string;
   }
 
   // Gets a wp icon using seed generator from blockname. also adds particular icons if contains certain strings like hero, list, slider, image etc. etc.

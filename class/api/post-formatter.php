@@ -136,8 +136,8 @@ class Post_Formatter {
     }
 
     // If no template found for the post type, use the global default
-    $default_before_content = get_field( "default_before_content", 'option' );
-    $default_after_content = get_field( "default_after_content", 'option' );
+    $default_before_content = get_field( 'default_before_content', 'option' );
+    $default_after_content = get_field( 'default_after_content', 'option' );
 
     return [
       'before_content' => $this->format_flexible_content( $default_before_content ),
@@ -156,6 +156,11 @@ class Post_Formatter {
       $block_data = isset( $block['attrs']['data'] ) 
         ? $block['attrs']['data'] 
         : [];
+
+      if ( ! $block_data ) {
+        $block_data = $block;
+        unset( $block_data['acf_fc_layout'] );
+      }
 
       $formatted_block = [
         'id' => uniqid('acf_'), // Generate a unique ID for ACF blocks
@@ -179,7 +184,7 @@ class Post_Formatter {
     return $formatted_content;
   }
 
-  private function parse_block_data( $content ) {
+  public function parse_block_data( $content ) {
     $blocks = parse_blocks( $content );
     return $this->format_blocks( $blocks );
   }

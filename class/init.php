@@ -47,8 +47,18 @@ class Init {
 		// TODO: multilingual
 
 		// Add revalidators
+		add_action( 'save_post', [ $this, 'revalidate_posts' ] );
+		add_action( 'save_post', [ $this, 'revalidate_menus' ], 10, 2 );
+		add_action( 'acf/save_post', [ $this, 'revalidate_settings' ] );
 
-		// Add redirects/fix page links
+		// Add redirects
+		add_action( 'template_redirect', [ $this, 'nextpress_redirect_frontend' ] );
+		
+		// Fix page links
+		add_filter( 'preview_post_link', [ $this, 'nextpress_edit_post_preview_link' ], 10, 2 );
+
+		// Disable editing if no blocks founds
+		add_action( 'init', [ $this, 'disable_editing_if_no_blocks' ] );
 	}
 
 	/**
@@ -68,5 +78,94 @@ class Init {
 
 		//Optional: Set the branch that contains the stable release.
 		// $update_checker->setBranch('stable-branch-name');
+	}
+
+	/**
+	 * Revalidate routes
+	 */
+	public function revalidate_posts() {
+		$response[0] = $this->helpers->revalidate_fetch_route( 'post' );
+		$response[1] = $this->helpers->revalidate_fetch_route( 'posts' );
+		return $response;
+	}
+	public function revalidate_menus( $post_id, $post ) {
+		if ( ! in_array( $post->post_type, [ 'nav_menu_item' ] ) ) return;
+		$response = $this->helpers->revalidate_fetch_route( 'menus' );
+		return $response;
+	}
+	public function revalidate_settings() {
+		$screen = get_current_screen();
+		if ( strpos( $screen->id, 'acf-options-settings' ) === false) return;
+		if ( strpos( $screen->id, 'templates' ) === false) return;
+		$response = $this->helpers->revalidate_fetch_route( 'settings' );
+		return $response;
+	}
+
+	/**
+	 * Redirect frontend
+	 */
+	public function nextpress_redirect_frontend() {
+		// Check for yoast redirects.
+    $redirects_json = get_option('wpseo-premium-redirects-base');
+    if ( $redirects_json ) {
+			foreach ( $redirects_json as $redirect ) {
+				if ( strpos( $_SERVER['REQUEST_URI'], $redirect['origin']) !== false ) {
+					wp_redirect( $this->helpers->frontend_url . '/' . ltrim( $redirect['url'] ), 301 );
+					exit;
+				}
+			}
+    }
+
+    // If multisite request, remove the blog url
+    if ( is_multisite() ) {
+			$path = get_blog_details()->path;
+			$req = str_replace( $path, '/', $_SERVER['REQUEST_URI'] );
+    } else {
+			$req = $_SERVER['REQUEST_URI'];
+    }
+
+    parse_str( parse_url( $req, PHP_URL_QUERY ), $query_params );
+		if ( isset( $query_params['page_id'] ) ) {
+			$page_id = $query_params['page_id'];
+			$req = '/api/draft?secret=<token>&id=' . $page_id;
+		}
+		wp_redirect( $this->helpers->frontend_url . $req, 301 );
+		exit;
+	}
+
+	/**
+	 * Fix preview post links
+	 */
+	public function nextpress_edit_post_preview_link( $link, $post ) {
+		$draft_link =  $this->helpers->frontend_url . '/api/draft?secret=<token>&id=' . $post->ID;
+    return $draft_link;
+	}
+
+	/**
+	 * Disable editing if no blocks founf in fetch_blocks_from_api function
+	 */
+	public function disable_editing_if_no_blocks() {
+		$blocks = $this->helpers->fetch_blocks_from_api();
+		if (empty($blocks)) {
+			add_filter( 'use_block_editor_for_post', '__return_false' );
+			add_action( 'admin_notices', [ $this, 'no_blocks_notice' ] );
+			add_action( 'admin_head', [ $this, 'hide_classic_editor' ] );
+		}
+	}
+	public function no_blocks_notice() {
+		?>
+			<div class="notice notice-error is-dismissible">
+				<p><?php _e('No blocks found. Please make sure the blocks api endpoint is configured', 'nextpress'); ?></p>
+			</div>
+		<?php
+	}
+	public function hide_classic_editor() {
+		?>
+			<style>
+				#post-body-content {
+					display: none;
+				}
+			</style>
+		<?php
 	}
 }

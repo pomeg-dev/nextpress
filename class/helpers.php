@@ -13,6 +13,7 @@ class Helpers {
   /**
    * API URLs
    */
+  public $dev_mode = true;
   public $frontend_url = 'http://localhost:3000';
   public $docker_url = 'http://host.docker.internal:3000';
   public $api_endpoint = '/api';
@@ -28,6 +29,7 @@ class Helpers {
     if ( function_exists( 'get_field' ) ) {
       $frontend_url = get_field('frontend_url', 'option');
       if ( $frontend_url ) {
+        $this->dev_mode = false;
         $this->frontend_url = rtrim( $frontend_url, '/' );
         $this->api_url = $this->frontend_url . $this->api_endpoint;
         $this->blocks_url = $this->frontend_url . $this->blocks_endpoint;
@@ -52,7 +54,7 @@ class Helpers {
       $blocks_url,
       [
         'timeout' => 15, // Increase timeout to 15 seconds
-        'sslverify' => false // Only use this for local development!
+        'sslverify' => ! $this->dev_mode // Only use this for local development!
       ]
     );
 
@@ -76,6 +78,14 @@ class Helpers {
     }
 
     return $data;
+  }
+
+  /**
+   * Revalidate Next.js route.
+   */
+  public function revalidate_fetch_route( $tag ) {
+    $request_url = $this->api_url . "/revalidate?tag=" . $tag;
+    return wp_remote_get( $request_url );
   }
 
   /**

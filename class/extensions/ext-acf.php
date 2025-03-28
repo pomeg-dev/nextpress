@@ -52,7 +52,12 @@ class Ext_ACF {
   }
 
   public function reformat_block_data( $block_data, $block ) {
-    if ( ! isset( $block['attrs']['data'] ) ) return $block;
+    if (
+      ! isset( $block['attrs']['data'] ) ||
+      ! isset( $block['attrs']['nextpress_id'] )
+    ) {
+      return $block_data;
+    }
 
     acf_setup_meta(
       $block['attrs']['data'],
