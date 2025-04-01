@@ -27,9 +27,6 @@ class API_Posts {
 
     // Register main posts route.
     add_action('rest_api_init', [ $this, 'register_routes' ] );
-
-    // Allow filtering by tax name.
-    add_action( 'rest_api_init', [ $this, 'modify_rest_query' ] );
   }
 
   public function register_routes() {
@@ -40,7 +37,16 @@ class API_Posts {
         'methods' => 'GET',
         'callback' => [ $this, 'get_posts' ],
         'permission_callback' => '__return_true',
-        'args' => $this->get_collection_params(),
+      ]
+    );
+
+    register_rest_route(
+      'nextpress',
+      '/tax_list/(?P<taxonomy>[a-zA-Z0-9_-]+)',
+      [
+        'methods' => 'GET',
+        'callback' => [ $this, 'get_tax_terms' ],
+        'permission_callback' => '__return_true',
       ]
     );
   }
@@ -48,7 +54,6 @@ class API_Posts {
   public function get_posts( $request ) {
     $params = $request->get_params();
     $args = $this->prepare_query_args( $params );
-
     $query = new \WP_Query( $args );
     $posts = $query->posts;
 
@@ -66,24 +71,51 @@ class API_Posts {
     return $response;
   }
 
-  private function prepare_query_args( $params ) {
-    $valid_params = $this->get_collection_params();
-    $args = [];
+  public function get_tax_terms( $request ) {
+    $taxonomy = $request->get_param( 'taxonomy' );
+    $terms = get_terms(
+      [
+        'taxonomy' => $taxonomy,
+        'hide_empty' => false,
+      ]
+    );
 
-    foreach ($params as $key => $value) {
-      if ( isset( $valid_params[ $key ] ) ) {
-        $args[ $key ] = $value;
+    $term_list = [];
+    if ( $terms && ! is_wp_error( $terms ) ) {
+      foreach ( $terms as $term ) {
+        $term_list[] = [
+          'term_id' => $term->term_id,
+          'slug' => $term->slug,
+          'name' => $term->name,
+        ];
       }
     }
+
+    $response = new \WP_REST_Response( $term_list );
+    return $response;
+  }
+
+  private function prepare_query_args( $params ) {
+    $args = [];
+
+    foreach ( $params as $key => $value ) {
+      $args[ $key ] = $value;
+    }
+
+    $args = $this->filter_query_args( $args );
 
     // Ensure we always have these defaults
     $args = wp_parse_args(
       $args,
       [
-        'post_type' => 'any',
-        'post_status' => 'publish',
-        'posts_per_page' => isset( $args['per_page'] ) 
-          ? $args['per_page'] 
+        'post_type' => isset( $args['post_type'] ) 
+          ? $args['post_type']
+          : 'any',
+        'post_status' => isset( $args['post_status'] ) 
+          ? $args['post_status']
+          : 'publish',
+        'posts_per_page' => isset( $args['posts_per_page'] ) 
+          ? $args['posts_per_page'] 
           : get_option( 'posts_per_page' ),
       ]
     );
@@ -91,163 +123,38 @@ class API_Posts {
     return $args;
   }
 
-  public function modify_rest_query() {
-    $post_types = get_post_types( [ 'public' => true ], 'names' );
-    foreach ( $post_types as $post_type ) {
-      add_filter( 'rest_' . $post_type . '_query', [ $this, 'rest_filter_by_custom_taxonomy' ], 10, 2 );
-    }
-  }
-
-  public function rest_filter_by_custom_taxonomy( $args, $request ) {
-    // Gather requested filter terms.
-    $params = $request->get_params();
+  private function filter_query_args( $args ) {
     $filters = [];
-    foreach ( $params as $key => $value ) {
+    $args_map = [
+      'search' => 's',
+      'per_page' => 'posts_per_page',
+      'status' => 'post_status',
+      'page' => 'paged'
+    ];
+
+    foreach ( $args as $key => $value ) {
+      // Map args to WP_Query args.
+      if ( isset( $args_map[ $key ] ) ) {
+        $args[ $args_map[ $key ] ] = $value;
+        unset( $args[ $key ] );
+      }
+
+      // Save tax terms.
       if ( strpos( $key, 'filter_' ) !== false ) {
-        $rest_tax = str_replace( 'filter_', '', $key );
-        $filters[ $rest_tax ] = [ 'terms' => $value ];
+        $taxonomy = str_replace( 'filter_', '', $key );
+        $filters[ $taxonomy ] = [ 'terms' => $value ];
       }
     }
-
-    if ( ! $filters ) {
-      return $args;
-    }
-
-    // Get proper slugs for taxonomies.
-    $taxonomies = get_taxonomies( array( 'public'   => true ), 'objects' );
-    foreach ( $taxonomies as $key => $tax ) {
-      if ( isset( $filters[ $tax->rest_base ] ) ) {
-        $filters[ $tax->rest_base ]['slug'] = $key;
-      }
-    }
-
+    
     // Set tax query for each filter.
-    foreach ( $filters as $rest_tax => $tax ) {
+    foreach ( $filters as $taxonomy => $tax ) {
       $args['tax_query'][] = [
-        'taxonomy' => sanitize_text_field( $tax['slug'] ),
+        'taxonomy' => sanitize_text_field( $taxonomy ),
         'field'    => 'slug',
         'terms'    => sanitize_text_field( $tax['terms'] ),
       ];
     }
 
     return $args;
-  }
-
-  public function get_collection_params() {
-    return [
-      'page' => [
-        'description' => 'Current page of the collection.',
-        'type' => 'integer',
-        'default' => 1,
-        'sanitize_callback' => 'absint',
-      ],
-      'per_page' => [
-        'description' => 'Maximum number of items to be returned in result set.',
-        'type' => 'integer',
-        'default' => 10,
-        'sanitize_callback' => 'sanitize_text_field',
-      ],
-      'search' => [
-        'description' => 'Limit results to those matching a string.',
-        'type' => 'string',
-      ],
-      'after' => [
-        'description' => 'Limit response to posts published after a given ISO8601 compliant date.',
-        'type' => 'string',
-        'format' => 'date-time',
-      ],
-      'author' => [
-        'description' => 'Limit result set to posts assigned to specific authors.',
-        'type' => 'array',
-        'items' => [
-          'type' => 'integer',
-        ],
-        'default' => [],
-      ],
-      'author_exclude' => [
-        'description' => 'Ensure result set excludes posts assigned to specific authors.',
-        'type' => 'array',
-        'items' => [
-          'type' => 'integer',
-        ],
-        'default' => [],
-      ],
-      'post__in' => [
-        'description' => 'Limit result set to posts specified in an array.',
-        'type' => 'array',
-        'items' => [
-          'type' => 'integer',
-        ],
-        'default' => [],
-      ],
-      'post__not_in' => [
-        'description' => 'Ensure result set excludes specific IDs.',
-        'type' => 'array',
-        'items' => [
-          'type' => 'integer',
-        ],
-        'default' => [],
-      ],
-      'category' => [
-        'description' => 'Limit result set to all items that have the specified term assigned in the categories taxonomy.',
-        'type' => 'array',
-        'items' => [
-          'type' => 'integer',
-        ],
-        'default' => [],
-      ],
-      'category_name' => [
-        'description' => 'Limit result set to all items that have the specified term assigned in the categories taxonomy.',
-        'type' => 'array',
-        'items' => [
-          'type' => 'string',
-        ],
-        'default' => [],
-      ],
-      'offset' => [
-        'description' => 'Offset the result set by a specific number of items.',
-        'type' => 'integer',
-      ],
-      'order' => [
-        'description' => 'Order sort attribute ascending or descending.',
-        'type' => 'string',
-        'default' => 'desc',
-        'enum' => ['asc', 'desc'],
-      ],
-      'orderby' => [
-        'description' => 'Sort collection by object attribute.',
-        'type' => 'string',
-        'default' => 'date',
-        'enum' => ['author', 'date', 'id', 'include', 'modified', 'parent', 'relevance', 'slug', 'include_slugs', 'title', 'post__in'],
-      ],
-      'slug' => [
-        'description' => 'Limit result set to posts with one or more specific slugs.',
-        'type' => 'array',
-        'items' => [
-          'type' => 'string',
-        ],
-        'default' => [],
-      ],
-      'status' => [
-        'default' => 'publish',
-        'description' => 'Limit result set to posts assigned one or more statuses.',
-        'type' => 'array',
-        'items' => [
-          'enum' => array_merge( array_keys( get_post_stati() ), ['any'] ),
-          'type' => 'string',
-        ],
-      ],
-      'tax_relation' => [
-        'description' => 'Limit result set based on relationship between multiple taxonomies.',
-        'type' => 'string',
-        'enum' => ['AND', 'OR'],
-      ],
-      'include_content' => [
-        'description' => 'Include the content of the post.',
-        'type' => 'boolean',
-        'default' => false,
-      ],
-      // Add more parameters as needed
-    ];
   }
 }

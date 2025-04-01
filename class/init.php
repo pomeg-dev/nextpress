@@ -29,9 +29,6 @@ class Init {
 		new Register_Pages();
 		new Register_Settings( $this->helpers );
 		new Register_Templates( $this->helpers );
-		
-		// Register gutenberg block fields
-		new Register_Blocks( $this->helpers );
 
 		// Register API routes
 		new API_Router( $this->helpers );
@@ -45,6 +42,9 @@ class Init {
 		new Ext_Yoast();
 		new Ext_GravityForms();
 		// TODO: multilingual
+
+		// Register gutenberg block fields
+		new Register_Blocks( $this->helpers );
 
 		// Add revalidators
 		add_action( 'save_post', [ $this, 'revalidate_posts' ] );

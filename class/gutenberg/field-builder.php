@@ -137,6 +137,14 @@ class Field_Builder {
           $field_args['choices'] = $this->get_menus();
           $builder->addSelect( $field['id'], $field_args );
           break;
+        case 'post_type':
+          $field_args['choices'] = $this->get_cpts();
+          $builder->addSelect( $field['id'], $field_args );
+          break;
+        case 'tax_list':
+          $field_args['choices'] = $this->get_tax();
+          $builder->addSelect( $field['id'], $field_args );
+          break;
         case 'theme':
           $field_args['choices'] = $this->get_nextpress_themes();
           $field_args['default_value'] = 'default-blocks';
@@ -187,6 +195,46 @@ class Field_Builder {
     }
 
     return $menu_choices;
+  }
+
+  /**
+   * Return WP post types as select choices.
+   */
+  private function get_cpts() {
+    $choices = [];
+    $exclude = [ 'attachment', 'page', 'media' ];
+    $post_types = get_post_types(
+      [ 'public' => true ],
+      'objects'
+    );
+    foreach ( $post_types as $post_type ) {
+      if ( in_array( $post_type->name, $exclude ) ) {
+        continue;
+      }
+      $choices[ $post_type->name ] = $post_type->label;
+    }
+
+    return $choices;
+  }
+
+  /**
+   * Return WP post types as select choices.
+   */
+  private function get_tax() {
+    $choices = [];
+    $exclude = [ 'post_format' ];
+    $taxonomies = get_taxonomies(
+      [ 'public'   => true ],
+      'objects'
+    );
+    foreach ( $taxonomies as $tax ) {
+      if ( in_array( $tax->name, $exclude ) ) {
+        continue;
+      }
+      $choices[ $tax->name ] = $tax->label;
+    }
+
+    return $choices;
   }
 
   /**

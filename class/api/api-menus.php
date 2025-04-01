@@ -26,7 +26,7 @@ class API_Menus {
   public function register_routes() {
     register_rest_route(
       'nextpress',
-      '/settings',
+      '/menus',
       [
         'methods' => 'GET',
         'callback' => [ $this, 'get_menus' ],

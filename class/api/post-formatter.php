@@ -200,7 +200,7 @@ class Post_Formatter {
     foreach ( $blocks as $index => $block ) {
       $block_data = isset( $block['attrs']['data'] ) 
         ? $block['attrs']['data'] 
-        : [];
+        : $block['attrs'];
 
       $block_id = isset( $block['attrs']['anchor'] ) 
         ? $block['attrs']['anchor'] 
@@ -209,6 +209,13 @@ class Post_Formatter {
             ? $block['attrs']['nextpress_id']
             : $block['blockName']
         );
+
+      if (
+        ! isset( $block['attrs']['nextpress_id'] ) &&
+        strpos( $block['blockName'], 'acf/' ) !== false
+      ) {
+        $block['attrs']['nextpress_id'] = uniqid();
+      }
 
       $formatted_block = [
         'id' => $block_id,
@@ -237,7 +244,7 @@ class Post_Formatter {
       }
 
       // Handle reusable blocks/patterns
-      if ($block['blockName'] == 'core/block' && $block['attrs']['ref']) {
+      if ( $block['blockName'] == 'core/block' && $block['attrs']['ref'] ) {
         $pattern_blocks = parse_blocks( get_post( $block['attrs']['ref'] )->post_content );
         $formatted_block['innerBlocks'] = $this->format_blocks( $pattern_blocks, $formatted_block['id'] );
       }

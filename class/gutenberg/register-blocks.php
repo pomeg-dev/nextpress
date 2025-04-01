@@ -101,15 +101,15 @@ class Register_Blocks {
     $block_prefix = isset( $block_html[0]['slug'] ) 
       ? 'field_' . str_replace( 'acf-', '', $block_html[0]['slug'] ) . '-block_'
       : '';
-    $block_html = wp_json_encode( $block_html );
+    $block_html = json_encode( $block_html, JSON_UNESCAPED_SLASHES );
     if ( $block_prefix ) {
       $block_html = str_replace( $block_prefix, '', $block_html );
     }
-    $encoded_content = base64_encode( $block_html );
+    $encoded_content = urlencode( base64_encode( $block_html ) );
     $frontend_url = $this->helpers->frontend_url;
     $iframe_id = 'block_preview_' . $block['id'];
 
-    echo "<iframe id='{$iframe_id}' src='{$frontend_url}/block-preview?post_id={$post_id}&content={$encoded_content}' width='100%' height='400px' style='pointer-events:none;'></iframe>";
+    echo "<iframe id='{$iframe_id}' src='{$frontend_url}/block-preview?post_id={$post_id}&content={$encoded_content}&iframe_id={$iframe_id}' width='100%' height='400px' style='pointer-events:none;'></iframe>";
 
     // Add the resize script.
     ?>
@@ -124,19 +124,22 @@ class Register_Blocks {
           }
           
           function handleMessage(event) {
-            if (event.data && event.data.type === 'blockPreviewHeight') {
+            if (
+              event.data && 
+              event.data.type === 'blockPreviewHeight' &&
+              event.data.iframeId === iframeId
+            ) {
+              console.log(iframeId, event.data.iframeId);
               var iframe = document.getElementById(iframeId);
               if (iframe) {
                 var newHeight = event.data.height + 20;
                 iframe.style.height = newHeight + 'px';
-                console.log('Adjusted ' + iframeId + ' height to: ' + newHeight + 'px');
               }
             }
           }
           
           window.removeEventListener('message', handleMessage);
           window.addEventListener('message', handleMessage);
-          console.log('Message listener set up for iframe: ' + iframeId);
         }
         
         setupMessageListener();
@@ -179,39 +182,31 @@ class Register_Blocks {
   }
 
   public function convert_acf_block_to_string($block) {
-    // Extract the essential components
     $name = $block['name'];
-    $data = isset($block['data']) ? $block['data'] : [];
-    $mode = isset($block['mode']) ? $block['mode'] : '';
-    $align = isset($block['align']) ? $block['align'] : '';
-    $anchor = isset($block['anchor']) ? $block['anchor'] : '';
+    $data = isset( $block['data'] ) ? $block['data'] : [];
+    $mode = isset( $block['mode'] ) ? $block['mode'] : '';
+    $align = isset( $block['align'] ) ? $block['align'] : '';
+    $anchor = isset( $block['anchor'] ) ? $block['anchor'] : '';
     
-    // Build the attributes object
     $attributes = [
-        'name' => $name,
-        'data' => $data
+      'name' => $name,
+      'data' => $data
     ];
     
-    // Add optional attributes if they exist
-    if (!empty($mode)) {
-        $attributes['mode'] = $mode;
+    if ( ! empty( $mode ) ) {
+      $attributes['mode'] = $mode;
     }
     
-    if (!empty($align)) {
-        $attributes['align'] = $align;
+    if ( ! empty( $align ) ) {
+      $attributes['align'] = $align;
     }
     
-    if (!empty($anchor)) {
-        $attributes['anchor'] = $anchor;
+    if ( ! empty( $anchor ) ) {
+      $attributes['anchor'] = $anchor;
     }
     
-    // Convert the attributes to JSON and escape unicode properly
-    $json_attributes = json_encode($attributes, JSON_UNESCAPED_SLASHES);
-    
-    // Replace unicode escaping with WordPress style escaping
-    $json_attributes = str_replace('--', '\u002d\u002d', $json_attributes);
-    
-    // Create the final block string
+    $json_attributes = json_encode( $attributes, JSON_UNESCAPED_SLASHES );
+    $json_attributes = str_replace( '--', '\u002d\u002d', $json_attributes );
     $block_string = "<!-- wp:{$name} {$json_attributes} /-->";
     
     return $block_string;
