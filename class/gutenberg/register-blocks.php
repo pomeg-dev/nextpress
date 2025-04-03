@@ -172,7 +172,13 @@ class Register_Blocks {
         ?>
         <InnerBlocks
           template="<?php echo esc_attr( wp_json_encode( $block_template ) ); ?>"
-          allowedBlocks="<?php echo esc_attr( wp_json_encode( $allowed_blocks ) ); ?>"
+          <?php
+            if ( $allowed_blocks && $allowed_blocks[0] !== 'all' ) :
+              ?>
+              allowedBlocks="<?php echo esc_attr( wp_json_encode( $allowed_blocks ) ); ?>"
+              <?php
+            endif;
+          ?>
         />
         <?php
       endif;
