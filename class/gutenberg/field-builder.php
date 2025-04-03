@@ -180,17 +180,17 @@ class Field_Builder {
    */
   private function get_menus() {
     $menu_choices = [ null => __('Please select menu', 'nextpress') ];
-    $menus = wp_get_nav_menus();
+    $menus = $this->safely_get_menus();
 
-    if ( !is_wp_error( $menus ) ) {
-      foreach ($menus as $menu) {
+    if ( $menus && ! is_wp_error( $menus ) ) {
+      foreach ( $menus as $menu ) {
         $id = $menu->term_id;
         $menu_choices["{{nav_id-$id}}"] = $menu->name;
       }
     } else {
       $menus = get_nav_menu_locations();
-      foreach ($menus as $location => $id) {
-        $menu_choices["{{nav_id-$id}}"] = ucfirst(str_replace('_', ' ', $location));
+      foreach ( $menus as $location => $id ) {
+        $menu_choices["{{nav_id-$id}}"] = ucfirst( str_replace( '_', ' ', $location ) );
       }
     }
 
@@ -267,5 +267,34 @@ class Field_Builder {
     }
 
     return $choices;
+  }
+
+  /**
+   * Safely get menus from wpdb to avoid taxonomy registration issues
+   */
+  private function safely_get_menus() {
+    global $wpdb;
+    $menu_items = $wpdb->get_results(
+      "SELECT t.*, tt.description 
+      FROM {$wpdb->terms} AS t 
+      INNER JOIN {$wpdb->term_taxonomy} AS tt 
+      ON t.term_id = tt.term_id 
+      WHERE tt.taxonomy = 'nav_menu' 
+      ORDER BY t.name ASC"
+    );
+    
+    if ( empty( $menu_items ) ) {
+      return [];
+    }
+    
+    // Convert to WP_Term objects to match wp_get_nav_menus() output format
+    $menus = [];
+    foreach ( $menu_items as $menu_item ) {
+      $term = new \WP_Term($menu_item);
+      $term->description = $menu_item->description;
+      $menus[] = $term;
+    }
+    
+    return $menus;
   }
 }

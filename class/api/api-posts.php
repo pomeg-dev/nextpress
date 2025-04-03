@@ -58,7 +58,10 @@ class API_Posts {
     $posts = $query->posts;
 
     $formatted_posts = array_map( function ( $post ) use ( $params ) {
-        return $this->formatter->format_post( $post, $params['include_content'] );
+      $include_content = isset( $params['include_content'] )
+        ? $params['include_content']
+        : false;
+      return $this->formatter->format_post( $post, $include_content );
     }, $posts );
 
     $response = new \WP_REST_Response( $formatted_posts );
