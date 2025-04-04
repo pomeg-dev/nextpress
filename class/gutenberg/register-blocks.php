@@ -98,6 +98,11 @@ class Register_Blocks {
 
     $block_html = $this->convert_acf_block_to_string( $block );
     $block_html = $this->formatter->parse_block_data( $block_html );
+
+    // Attempt to parse inner blocks and patterns.
+    $block_id = isset( $block_html[0]['id'] ) ? $block_html[0]['id'] : false;
+    $block_html = $this->set_inner_blocks( $block_id, $post_id, $block_html );
+
     $block_prefix = isset( $block_html[0]['slug'] ) 
       ? 'field_' . str_replace( 'acf-', '', $block_html[0]['slug'] ) . '-block_'
       : '';
@@ -129,7 +134,6 @@ class Register_Blocks {
               event.data.type === 'blockPreviewHeight' &&
               event.data.iframeId === iframeId
             ) {
-              console.log(iframeId, event.data.iframeId);
               var iframe = document.getElementById(iframeId);
               if (iframe) {
                 var newHeight = event.data.height + 20;
@@ -187,7 +191,39 @@ class Register_Blocks {
     <?php
   }
 
-  public function convert_acf_block_to_string($block) {
+  /**
+   * Parse post content and try to set inner blocks into block_html, including Patterns
+   */
+  private function set_inner_blocks( $block_id, $post_id, $block_html ) {
+    $post_content = get_post_field( 'post_content', $post_id );
+    $all_blocks = parse_blocks( $post_content );
+    foreach ( $all_blocks as $block_content ) {
+      if ( $block_id === $block_content['attrs']['anchor'] ) {
+        $inner_blocks = $block_content['innerBlocks'];
+        foreach ( $inner_blocks as $key => $nested_block ) {
+          if ( $nested_block['blockName'] === 'core/block' ) {
+            $pattern_id = $nested_block['attrs']['ref'];
+            $pattern_post = get_post( $pattern_id );
+            
+            if ( $pattern_post && $pattern_post->post_type === 'wp_block' ) {
+              $pattern_blocks = parse_blocks( $pattern_post->post_content );
+              foreach ( $pattern_blocks as &$inner_pattern_block ) {
+                $inner_pattern_block['data'] = $inner_pattern_block['attrs'];
+              }
+              $inner_blocks[ $key ]['innerBlocks'] = $pattern_blocks;
+            }
+          }
+        }
+
+        $block_html[0]['innerBlocks'] = $inner_blocks;
+        break;
+      }
+    }
+
+    return $block_html;
+  }
+
+  public function convert_acf_block_to_string( $block ) {
     $name = $block['name'];
     $data = isset( $block['data'] ) ? $block['data'] : [];
     $mode = isset( $block['mode'] ) ? $block['mode'] : '';
