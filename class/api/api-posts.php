@@ -102,6 +102,9 @@ class API_Posts {
     $args = [];
 
     foreach ( $params as $key => $value ) {
+      $value = ( is_string( $value ) && strpos( $value, ',' ) !== false )
+        ? explode( ',', $value ) 
+        : $value;
       $args[ $key ] = $value;
     }
 
