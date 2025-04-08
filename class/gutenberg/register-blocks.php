@@ -208,7 +208,11 @@ class Register_Blocks {
             if ( $pattern_post && $pattern_post->post_type === 'wp_block' ) {
               $pattern_blocks = parse_blocks( $pattern_post->post_content );
               foreach ( $pattern_blocks as &$inner_pattern_block ) {
-                $inner_pattern_block['data'] = $inner_pattern_block['attrs'];
+                if ( isset( $inner_pattern_block['attrs']['data'] ) ) {
+                  $inner_pattern_block['data'] = $inner_pattern_block['attrs']['data'];
+                } else {
+                  $inner_pattern_block['data'] = $inner_pattern_block['attrs'];
+                }
               }
               $inner_blocks[ $key ]['innerBlocks'] = $pattern_blocks;
             }
