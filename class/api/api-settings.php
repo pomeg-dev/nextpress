@@ -29,11 +29,11 @@ class API_Settings {
     add_action('rest_api_init', [ $this, 'register_routes' ] );
 
     // Add ACF/Yoast filters.
-    add_filter( 'ng_settings', [ $this, 'add_acf_to_ng_settings' ] );
-    add_filter( 'ng_settings', [ $this, 'add_yoast_base_to_ng_settings'] );
+    add_filter( 'nextpress_settings', [ $this, 'add_acf_to_nextpress_settings' ] );
+    add_filter( 'nextpress_settings', [ $this, 'add_yoast_base_to_nextpress_settings'] );
 
     // Format default template content.
-    add_filter( 'ng_settings', [ $this, 'format_default_template'] );
+    add_filter( 'nextpress_settings', [ $this, 'format_default_template'] );
   }
 
   public function register_routes() {
@@ -52,7 +52,7 @@ class API_Settings {
       switch_to_blog( get_current_blog_id() );
     }
     
-    $all_settings = apply_filters( "ng_settings", wp_load_alloptions() );
+    $all_settings = apply_filters( "nextpress_settings", wp_load_alloptions() );
 
     if ( is_multisite() ) {
       restore_current_blog();
@@ -61,7 +61,7 @@ class API_Settings {
     return $all_settings;
   }
 
-  public function add_acf_to_ng_settings( $settings ) {
+  public function add_acf_to_nextpress_settings( $settings ) {
     if ( ! function_exists( 'get_fields' ) ) return;
     $options = get_fields( 'options' );
     if ( $options ) {
@@ -70,7 +70,7 @@ class API_Settings {
     return $settings;
   }
 
-  public function add_yoast_base_to_ng_settings( $settings ) {
+  public function add_yoast_base_to_nextpress_settings( $settings ) {
     if ( ! class_exists( 'WPSEO_Options' ) ) return $settings;
     $yoast_settings = \WPSEO_Options::get_all();
     $settings = array_merge( $settings, $yoast_settings );

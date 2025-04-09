@@ -91,12 +91,12 @@ class Init {
 	public function revalidate_menus( $post_id, $post ) {
 		if ( ! in_array( $post->post_type, [ 'nav_menu_item' ] ) ) return;
 		$response = $this->helpers->revalidate_fetch_route( 'menus' );
+		$response = $this->helpers->revalidate_fetch_route( 'settings' );
 		return $response;
 	}
 	public function revalidate_settings() {
 		$screen = get_current_screen();
-		if ( strpos( $screen->id, 'acf-options-settings' ) === false) return;
-		if ( strpos( $screen->id, 'templates' ) === false) return;
+		if ( strpos( $screen->id, 'nextpress' ) === false) return;
 		$response = $this->helpers->revalidate_fetch_route( 'settings' );
 		return $response;
 	}
