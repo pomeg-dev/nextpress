@@ -136,8 +136,11 @@ class Register_Blocks {
             ) {
               var iframe = document.getElementById(iframeId);
               if (iframe) {
-                var newHeight = event.data.height + 20;
-                iframe.style.height = newHeight + 'px';
+                var newHeight = (event.data.height + 20) + 'px';
+                if (typeof event.data.height === 'string' && event.data.height.includes('vh')) {
+                  newHeight = event.data.height;
+                }
+                iframe.style.height = newHeight;
               }
             }
           }
