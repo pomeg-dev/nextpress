@@ -54,6 +54,13 @@ class API_Settings {
     
     $all_settings = apply_filters( "nextpress_settings", wp_load_alloptions() );
 
+    // Add blog page slug.
+    $page_for_posts = get_option( 'page_for_posts' );
+    $blog_page = get_post( $page_for_posts );
+    if ( $blog_page ) {
+      $all_settings['page_for_posts_slug'] = $blog_page->post_name;
+    }
+
     if ( is_multisite() ) {
       restore_current_blog();
     }

@@ -30,8 +30,15 @@ class Register_Templates {
   public function __construct( $helpers ) {
     $this->helpers = $helpers;
     $this->field_builder = new Field_Builder();
+    add_action( 'wp_loaded', [ $this, 'set_templates' ] );
+    add_action( 'wp_loaded', [ $this, 'register_templates' ] );
+  }
+
+  /**
+   * Set templates in class property.
+   */
+  public function set_templates() {
     $this->templates = $this->build_templates();
-    add_action( 'acf/init', [ $this, 'register_templates' ] );
   }
 
   /**
@@ -39,7 +46,9 @@ class Register_Templates {
    */
   public function register_templates() {
     // ACF register.
-    acf_add_local_field_group( $this->templates->build() );
+    if ( function_exists( 'acf_add_local_field_group' ) ) {
+      acf_add_local_field_group( $this->templates->build() );
+    }
   }
 
   /**
@@ -58,16 +67,20 @@ class Register_Templates {
     $exclude = [ 'attachment' ];
     $post_types = get_post_types(
       [ 'public' => true ],
-      'names', 
+      'objects', 
       'and'
     );
     foreach ( $post_types as $post_type ) {
-      if ( in_array( $post_type, $exclude ) ) {
+      if ( in_array( $post_type->name, $exclude ) ) {
+        continue;
+      }
+      $supports_editor = post_type_supports( $post_type->name, 'editor' );
+      if ( ! $supports_editor ) {
         continue;
       }
       $templates
-        ->addTab( ucfirst( $post_type ) )
-        ->addFields( $this->create_post_type_template_fields( $post_type ) );
+        ->addTab( ucfirst( $post_type->name ) )
+        ->addFields( $this->create_post_type_template_fields( $post_type->name ) );
     }
 
     $templates
@@ -120,7 +133,7 @@ class Register_Templates {
         'hide_empty' => false,
       ]
     );
-    $category_choices = [];
+    $category_choices = [ '' => __( 'Select category', 'nextpress' ) ];
     foreach ( $categories as $category ) {
       $category_choices[ $category->term_id ] = $category->name;
     }
@@ -143,6 +156,11 @@ class Register_Templates {
         'button_label' => 'Add Block',
         'layout' => 'block'
       ])
+      ->addFlexibleContent('sidebar_content', [
+        'label' => 'Sidebar Content',
+        'button_label' => 'Add Block',
+        'layout' => 'block'
+      ])
       ->endRepeater();
 
     // Add layouts to flexible content fields
@@ -155,6 +173,10 @@ class Register_Templates {
       $template
         ->getField("{$post_type}_content_templates")
         ->getField('after_content')
+        ->addLayout($layout);
+      $template
+        ->getField("{$post_type}_content_templates")
+        ->getField('sidebar_content')
         ->addLayout($layout);
     }
 

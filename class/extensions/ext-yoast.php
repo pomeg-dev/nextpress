@@ -11,11 +11,12 @@ defined('ABSPATH') or die('You do not have access to this file');
 
 class Ext_Yoast {
   public function __construct() {
-    add_filter( 'nextpress_post_object', [ $this, 'include_yoast_data' ], 10, 1 );
+    add_filter( 'nextpress_post_object', [ $this, 'include_yoast_post_data' ], 10, 1 );
+    add_filter( 'nextpress_term_object', [ $this, 'include_yoast_term_data' ], 10, 1 );
     add_filter( 'nextpress_post_not_found', [ $this, 'include_yoast_404_redirects' ], 10, 1 );
   }
 
-  public function include_yoast_data( $post ) {
+  public function include_yoast_post_data( $post ) {
     if ( ! function_exists( 'YoastSEO' ) ) return $post;
     $meta_helper = YoastSEO()->classes->get( \Yoast\WP\SEO\Surfaces\Meta_Surface::class );
     $post_id = is_object( $post ) 
@@ -38,6 +39,17 @@ class Ext_Yoast {
     }
 
     return $post;
+  }
+
+  public function include_yoast_term_data( $term ) {
+    if ( ! function_exists( 'YoastSEO' ) ) return $term;
+    $meta_helper = YoastSEO()->classes->get( \Yoast\WP\SEO\Surfaces\Meta_Surface::class );
+    $meta = $meta_helper->for_term( $term->term_id, $term->taxonomy );
+
+    if (!$meta) return $term;
+    $term->yoastHeadJSON = $meta->get_head()->json;
+    
+    return $term;
   }
 
   public function include_yoast_404_redirects( $post ) {

@@ -122,6 +122,7 @@ class Post_Formatter {
           return [
             'before_content' => $this->format_flexible_content( $template['before_content'] ),
             'after_content' => $this->format_flexible_content( $template['after_content'] ),
+            'sidebar_content' => $this->format_flexible_content( $template['sidebar_content'] ),
           ];
         }
       }
@@ -131,6 +132,7 @@ class Post_Formatter {
         return [
           'before_content' => $this->format_flexible_content( $default_template['before_content'] ),
           'after_content' => $this->format_flexible_content( $default_template['after_content'] ),
+          'sidebar_content' => $this->format_flexible_content( $default_template['sidebar_content'] ),
         ];
       }
     }

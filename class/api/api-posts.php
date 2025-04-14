@@ -49,6 +49,16 @@ class API_Posts {
         'permission_callback' => '__return_true',
       ]
     );
+
+    register_rest_route(
+      'nextpress',
+      '/tax_term/(?P<taxonomy>[a-zA-Z0-9_-]+)/(?P<term>[a-zA-Z0-9_-]+)',
+      [
+        'methods' => 'GET',
+        'callback' => [ $this, 'get_the_term' ],
+        'permission_callback' => '__return_true',
+      ]
+    );
   }
 
   public function get_posts( $request ) {
@@ -96,6 +106,17 @@ class API_Posts {
 
     $response = new \WP_REST_Response( $term_list );
     return $response;
+  }
+
+  public function get_the_term( $request ) {
+    $taxonomy = $request->get_param( 'taxonomy' );
+    $term_slug = $request->get_param( 'term' );
+    $term = get_term_by( 'name', $term_slug, $taxonomy );
+    if ( $term && ! is_wp_error( $term ) ) {
+      $response = new \WP_REST_Response( apply_filters( 'nextpress_term_object', $term ) );
+      return $response;
+    }
+    return new \WP_REST_Response( [] );
   }
 
   private function prepare_query_args( $params ) {
