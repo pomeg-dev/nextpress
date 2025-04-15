@@ -202,7 +202,7 @@ class Field_Builder {
    */
   private function get_cpts() {
     $choices = [];
-    $exclude = [ 'attachment', 'page', 'media' ];
+    $exclude = [ 'attachment', 'media' ];
     $post_types = get_post_types(
       [ 'public' => true ],
       'objects'

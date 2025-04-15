@@ -35,13 +35,17 @@ class Register_Blocks {
     $this->field_builder = new Field_Builder();
 
     // Register blocks.
-    add_action( 'acf/init', [ $this, 'regsiter_nextpress_blocks' ] );
+    add_action( 'wp_loaded', [ $this, 'regsiter_nextpress_blocks' ] );
   }
 
   /**
    * Get API fields and register ACF blocks callback function
    */
   public function regsiter_nextpress_blocks() {
+    if ( ! function_exists('acf_register_block_type') ) {
+      return;
+    }
+
     $themes = get_field( 'blocks_theme', 'option' );
     $blocks = $this->helpers->fetch_blocks_from_api( $themes );
 
