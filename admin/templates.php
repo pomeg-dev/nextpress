@@ -49,6 +49,10 @@ function create_block_layouts()
     $layouts = [];
 
     foreach ($blocks as $block) {
+        //skip if malformed
+        if (!isset($block['id']) || !isset($block['fields'])) {
+            continue;
+        }
         $layout = new FieldsBuilder($block['id']);
         $layout = build_acf_fields($block['fields'], $layout);
         $layouts[$block['id']] = $layout;
