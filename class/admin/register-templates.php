@@ -194,7 +194,7 @@ class Register_Templates {
     foreach ( $blocks as $block ) {
       $layout = new FieldsBuilder( $block['id'] );
       $layout = $this->field_builder->build( $block['fields'], $layout );
-      $layouts[ $block['id'] ] = $layout;
+      $layouts[ $block['id'] ] = apply_filters( 'nextpress_block_layouts', $layout );
     }
 
     return $layouts;
