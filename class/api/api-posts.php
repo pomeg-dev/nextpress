@@ -100,6 +100,7 @@ class API_Posts {
           'term_id' => $term->term_id,
           'slug' => $term->slug,
           'name' => $term->name,
+          'url' => get_term_link( $term ),
         ];
       }
     }
