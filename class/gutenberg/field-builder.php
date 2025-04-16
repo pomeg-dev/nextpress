@@ -221,7 +221,7 @@ class Field_Builder {
    * Return WP post types as select choices.
    */
   private function get_tax() {
-    $choices = [];
+    $choices = [ null => __('Please select taxonomy', 'nextpress') ];
     $exclude = [ 'post_format' ];
     $taxonomies = get_taxonomies(
       [ 'public'   => true ],
