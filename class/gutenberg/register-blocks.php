@@ -114,6 +114,12 @@ class Register_Blocks {
     if ( $block_prefix ) {
       $block_html = str_replace( $block_prefix, '', $block_html );
     }
+
+    // Remove modal_content items
+    $pattern = '/"modal_content":\s*(\{(?:[^{}]|(?1))*\})/';
+    $replacement = '"modal_content": null';
+    $block_html = preg_replace( $pattern, $replacement, $block_html );
+
     $encoded_content = urlencode( base64_encode( $block_html ) );
     $frontend_url = $this->helpers->frontend_url;
     $iframe_id = 'block_preview_' . $block['id'];

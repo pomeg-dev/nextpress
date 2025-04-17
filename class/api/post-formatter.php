@@ -14,7 +14,7 @@ class Post_Formatter {
   /**
    * Main formatter function
    */
-  public function format_post( $post, $include_content = false, $include_meta = true ) {
+  public function format_post( $post, $include_content = false, $include_metadata = true ) {
     $formatted_post = [
       'id' => $post->ID,
       'slug' => $this->get_slug( $post ),
@@ -45,7 +45,7 @@ class Post_Formatter {
     $formatted_post = $this->return_post_revision_for_preview( $formatted_post );
 
     if ( $include_metadata ) {
-      return apply_filters( 'nextpress_post_object_w_meta', $formatted_post );
+      $formatted_post = apply_filters( 'nextpress_post_object_w_meta', $formatted_post );
     }
     
     return apply_filters( 'nextpress_post_object', $formatted_post );
