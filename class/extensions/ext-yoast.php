@@ -11,7 +11,7 @@ defined('ABSPATH') or die('You do not have access to this file');
 
 class Ext_Yoast {
   public function __construct() {
-    add_filter( 'nextpress_post_object', [ $this, 'include_yoast_post_data' ], 10, 1 );
+    add_filter( 'nextpress_post_object_w_meta', [ $this, 'include_yoast_post_data' ], 10, 1 );
     add_filter( 'nextpress_term_object', [ $this, 'include_yoast_term_data' ], 10, 1 );
     add_filter( 'nextpress_post_not_found', [ $this, 'include_yoast_404_redirects' ], 10, 1 );
   }

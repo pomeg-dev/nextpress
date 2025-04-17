@@ -223,8 +223,12 @@ class Register_Blocks {
               }
               $inner_blocks[ $key ]['innerBlocks'] = $pattern_blocks;
             }
+          } else {
+            $nested_block['data'] = $this->parse_acf_repeater_fields( $nested_block, $post_id );
+            $inner_blocks[ $key ] = $nested_block;
           }
         }
+
 
         $block_html[0]['innerBlocks'] = $inner_blocks;
         break;
@@ -232,6 +236,62 @@ class Register_Blocks {
     }
 
     return $block_html;
+  }
+
+  private function parse_acf_repeater_fields( $block, $post_id ) {
+    $data = $block['attrs']['data'];
+    $result = [];
+    $repeaters = [];
+    
+    foreach ( $data as $key => $value ) {
+      if (strpos($key, '_') === 0) continue;
+      if ( strpos( $key, '_' ) === false ) {
+        $result[ $key ] = $value;
+        
+        if (
+          is_numeric( $value ) && 
+          $value > 0 &&
+          isset( $data["_{$key}"] ) && 
+          strpos( $data["_{$key}"], 'field_' ) === 0
+        ) {
+          $repeaters[ $key ] = (int) $value;
+        }
+      }
+    }
+    
+    // Process each repeater field
+    foreach ( $repeaters as $repeater_name => $count ) {
+      $items = [];
+      
+      for ( $i = 0; $i < $count; $i++ ) {
+        $item = [];
+        $prefix = "{$repeater_name}_{$i}_";
+        $prefix_length = strlen( $prefix );
+        
+        foreach ( $data as $key => $value ) {
+          if ( strpos( $key, '_' ) === 0 ) continue;
+          
+          // Check for correct return values.
+          if ( strpos( $key, $prefix ) === 0 ) {
+            $acf_key = $data["_$key"];
+            $field_name = substr( $key, $prefix_length );
+            if ( ! empty( $acf_key ) && function_exists( 'acf_format_value' ) ) {
+              $item[ $field_name ] = acf_format_value( $value, $post_id, acf_get_field( $acf_key ) );
+            } else {
+              $item[ $field_name ] = $value;
+            }
+          }
+        }
+        
+        if ( ! empty( $item ) ) {
+          $items[] = $item;
+        }
+      }
+      
+      $result[ $repeater_name ] = $items;
+    }
+    
+    return $result;
   }
 
   public function convert_acf_block_to_string( $block ) {
