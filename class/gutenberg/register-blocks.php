@@ -120,11 +120,11 @@ class Register_Blocks {
     $replacement = '"modal_content": null';
     $block_html = preg_replace( $pattern, $replacement, $block_html );
 
-    $encoded_content = urlencode( base64_encode( $block_html ) );
+    $encoded_content = urlencode( $this->compress_data( $block_html ) );
     $frontend_url = $this->helpers->frontend_url;
     $iframe_id = 'block_preview_' . $block['id'];
 
-    echo "<iframe id='{$iframe_id}' src='{$frontend_url}/block-preview?post_id={$post_id}&content={$encoded_content}&iframe_id={$iframe_id}' width='100%' height='400px' style='pointer-events:none;'></iframe>";
+    echo "<iframe id='{$iframe_id}' src='{$frontend_url}/block-preview?post_id={$post_id}&content={$encoded_content}&iframe_id={$iframe_id}' width='100%' height='400px' style='pointer-events:none;min-height:80px;'></iframe>";
 
     // Add the resize script.
     ?>
@@ -279,13 +279,9 @@ class Register_Blocks {
           
           // Check for correct return values.
           if ( strpos( $key, $prefix ) === 0 ) {
-            $acf_key = $data["_$key"];
+            // $acf_key = $data["_$key"];
             $field_name = substr( $key, $prefix_length );
-            if ( ! empty( $acf_key ) && function_exists( 'acf_format_value' ) ) {
-              $item[ $field_name ] = acf_format_value( $value, $post_id, acf_get_field( $acf_key ) );
-            } else {
-              $item[ $field_name ] = $value;
-            }
+            $item[ $field_name ] = $value;
           }
         }
         
@@ -329,6 +325,12 @@ class Register_Blocks {
     $block_string = "<!-- wp:{$name} {$json_attributes} /-->";
     
     return $block_string;
+  }
+
+  // Compress data.
+  private function compress_data( $data ) {
+    $compressed = gzcompress( $data, 9) ;
+    return rtrim( strtr( base64_encode( $compressed ), '+/', '-_' ), '=' );
   }
 
   // Gets a wp icon using seed generator from blockname. also adds particular icons if contains certain strings like hero, list, slider, image etc. etc.
