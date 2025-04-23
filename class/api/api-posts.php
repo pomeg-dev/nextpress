@@ -160,7 +160,14 @@ class API_Posts {
       'page' => 'paged'
     ];
 
+    $arrays_map = [ 'post__not_in', 'post__in' ];
+
     foreach ( $args as $key => $value ) {
+      // Remap single values to arrays.
+      if ( in_array( $key, $arrays_map ) && ! is_array( $value ) ) {
+        $args[ $key ] = [ $value ];
+      }
+
       // Map args to WP_Query args.
       if ( isset( $args_map[ $key ] ) ) {
         $args[ $args_map[ $key ] ] = $value;
