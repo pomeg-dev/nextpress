@@ -201,6 +201,9 @@ class User_Flow {
     $user_password = sanitize_text_field($request->get_param('user_password'));
     $remember = filter_var($request->get_param('remember'), FILTER_SANITIZE_NUMBER_INT);
 
+    np_dumper( '$user_login' );
+    np_dumper( $user_login );
+
     if (!$user_login || !$user_password) {
       return new \WP_REST_Response([
         'message' => __('All fields are required', 'nextpress'),

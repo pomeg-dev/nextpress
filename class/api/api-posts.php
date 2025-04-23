@@ -178,7 +178,7 @@ class API_Posts {
     foreach ( $filters as $taxonomy => $tax ) {
       $args['tax_query'][] = [
         'taxonomy' => sanitize_text_field( $taxonomy ),
-        'field'    => 'slug',
+        'field'    => is_numeric( $tax['terms'] ) ? 'term_id' : 'slug',
         'terms'    => sanitize_text_field( $tax['terms'] ),
       ];
     }
