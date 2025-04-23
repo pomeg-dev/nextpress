@@ -260,7 +260,7 @@ class Field_Builder {
       return $field;
     }
 
-    $forms = GFAPI::get_forms( true );
+    $forms = \GFAPI::get_forms( true );
     $choices[null] = __( 'Please select form', 'nextpress' );
     foreach ( $forms as $form ) {
       $choices['form_id_' . $form['id']] = $form['title'];

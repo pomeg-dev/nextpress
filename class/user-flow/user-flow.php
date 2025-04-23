@@ -19,7 +19,9 @@ class User_Flow {
    */
   public $helpers;
 
-  public function __construct() {
+  public function __construct( $helpers ) {
+    $this->helpers = $helpers;
+
     // Includes.
     if ( ! class_exists( 'Firebase\JWT\JWT' ) ) {
       require_once NEXTPRESS_PATH . '/includes/php-jwt/src/JWT.php';
@@ -107,7 +109,7 @@ class User_Flow {
    * Initialise user flow.
    */
   public function init() {
-    add_action('rest_pre_serve_request', function( $response ) {
+    add_filter('rest_pre_serve_request', function( $response ) {
       header( 'Access-Control-Allow-Origin: ' . $this->helpers->frontend_url );
       header( 'Access-Control-Allow-Credentials: true' );
       header( 'Access-Control-Allow-Methods: GET, POST, OPTIONS' );
@@ -115,73 +117,66 @@ class User_Flow {
       return $response;
     });
 
-    // Register routes.
-    $this->register_routes();
+    // Register main posts route.
+    add_action('rest_api_init', [ $this, 'register_routes' ] );
+
+    // Login redirect hook.
     add_action('login_init', [$this, 'redirect_login']);
-  }
-
-  /**
-   * Redirect login page.
-   */
-  public function redirect_login() {
-    // Function to auth JWT and redirect to admin from nextjs.
-    $redirect_to = isset( $_GET['redirect_to'] ) ? $_GET['redirect_to'] : '';
-    if ( strpos( $redirect_to, 'token=' ) !== false) {
-      $url_parts = parse_url( $redirect_to );
-      parse_str( $url_parts['query'], $query_params );
-      $redirect_to = remove_query_arg( 'token', $redirect_to );
-      $token = $query_params['token'];
-
-      if ( ! $token ) {
-        return;
-      }
-
-      try {
-        $decoded_token = JWT::decode( $token, new Key( JWT_AUTH_SECRET_KEY, 'HS256' ) );
-        if ( isset( $decoded_token->user_id ) ) {
-          wp_set_auth_cookie( $decoded_token->user_id );
-          wp_redirect( $redirect_to );
-          exit;
-        }
-      } catch ( Exception $e ) {
-        error_log( 'Token verification failed: ' . $e->getMessage() );
-        wp_redirect( home_url( '/login' ) );
-        exit;
-      }
-    }
   }
 
   /**
    * Register API routes
    */
-  private function register_routes() {
-    add_action('rest_api_init', function () {
-      register_rest_route('nextpress', '/logout', array(
-          'methods' => 'GET',
-          'callback' => [ $this, 'logout_callback' ],
-          'permission_callback' => '__return_true'
-      ));
-      register_rest_route('nextpress', '/login', array(
-          'methods' => 'POST',
-          'callback' => [ $this, 'login_callback' ],
-          'permission_callback' => '__return_true'
-      ));
-      register_rest_route('nextpress', '/request-reset', array(
-          'methods' => 'POST',
-          'callback' => [ $this, 'forgot_password_callback' ],
-          'permission_callback' => '__return_true'
-      ));
-      register_rest_route('nextpress', '/reset-password', array(
-          'methods' => 'POST',
-          'callback' => [ $this, 'reset_password_callback' ],
-          'permission_callback' => '__return_true'
-      ));
-      register_rest_route('nextpress', '/register', array(
-          'methods' => 'POST',
-          'callback' => [ $this, 'register_callback' ],
-          'permission_callback' => '__return_true',
-      ));
-    });
+  public function register_routes() {
+    register_rest_route(
+      'nextpress', 
+      '/logout',
+      [
+        'methods' => 'GET',
+        'callback' => [ $this, 'logout_callback' ],
+        'permission_callback' => '__return_true'
+      ]
+    );
+
+    register_rest_route(
+      'nextpress', 
+      '/login',
+      [
+        'methods' => 'POST',
+        'callback' => [ $this, 'login_callback' ],
+        'permission_callback' => '__return_true'
+      ]
+    );
+
+    register_rest_route(
+      'nextpress', 
+      '/request-reset',
+      [
+        'methods' => 'POST',
+        'callback' => [ $this, 'forgot_password_callback' ],
+        'permission_callback' => '__return_true'
+      ]
+    );
+
+    register_rest_route(
+      'nextpress', 
+      '/reset-password',
+      [
+        'methods' => 'POST',
+        'callback' => [ $this, 'reset_password_callback' ],
+        'permission_callback' => '__return_true'
+      ]
+    );
+
+    register_rest_route(
+      'nextpress', 
+      '/register',
+      [
+        'methods' => 'POST',
+        'callback' => [ $this, 'register_callback' ],
+        'permission_callback' => '__return_true',
+      ]
+    );
   }
 
   public function logout_callback() {
@@ -193,16 +188,13 @@ class User_Flow {
       'message' => __('User logged out successfully', 'nextpress'),
       'success' => true,
     ];
-    return new \WP_REST_Response($response);
+    return new \WP_REST_Response( $response );
   }
 
-  public function login_callback(WP_REST_Request $request) {
+  public function login_callback( \WP_REST_Request $request ) {
     $user_login = sanitize_text_field($request->get_param('user_login'));
     $user_password = sanitize_text_field($request->get_param('user_password'));
     $remember = filter_var($request->get_param('remember'), FILTER_SANITIZE_NUMBER_INT);
-
-    np_dumper( '$user_login' );
-    np_dumper( $user_login );
 
     if (!$user_login || !$user_password) {
       return new \WP_REST_Response([
@@ -256,7 +248,7 @@ class User_Flow {
     return $jwt;
   }
 
-  public function forgot_password_callback(WP_REST_Request $request) {
+  public function forgot_password_callback( \WP_REST_Request $request ) {
     $email = sanitize_email($request->get_param('email'));
 
     if (!$email) {
@@ -295,7 +287,7 @@ class User_Flow {
     ]);
   }
 
-  public function reset_password_callback(WP_REST_Request $request) {
+  public function reset_password_callback( \WP_REST_Request $request ) {
     $reset_key = sanitize_text_field($request->get_param('key'));
     $login = sanitize_text_field($request->get_param('login'));
     $password = sanitize_text_field($request->get_param('password'));
@@ -322,7 +314,7 @@ class User_Flow {
     ]);
   }
 
-  public function register_callback(WP_REST_Request $request) {
+  public function register_callback( \WP_REST_Request $request ) {
     if (!get_option('users_can_register')) {
       return new \WP_REST_Response([
         'message' => __('Registration is closed.', 'nextpress'),
@@ -380,5 +372,36 @@ class User_Flow {
       'success' => true,
       'redirect' => $redirect_link,
     ]);
+  }
+
+  /**
+   * Redirect login page.
+   */
+  public function redirect_login() {
+    // Function to auth JWT and redirect to admin from nextjs.
+    $redirect_to = isset( $_GET['redirect_to'] ) ? $_GET['redirect_to'] : '';
+    if ( strpos( $redirect_to, 'token=' ) !== false) {
+      $url_parts = parse_url( $redirect_to );
+      parse_str( $url_parts['query'], $query_params );
+      $redirect_to = remove_query_arg( 'token', $redirect_to );
+      $token = $query_params['token'];
+
+      if ( ! $token ) {
+        return;
+      }
+
+      try {
+        $decoded_token = JWT::decode( $token, new Key( JWT_AUTH_SECRET_KEY, 'HS256' ) );
+        if ( isset( $decoded_token->user_id ) ) {
+          wp_set_auth_cookie( $decoded_token->user_id );
+          wp_redirect( $redirect_to );
+          exit;
+        }
+      } catch ( Exception $e ) {
+        error_log( 'Token verification failed: ' . $e->getMessage() );
+        wp_redirect( home_url( '/login' ) );
+        exit;
+      }
+    }
   }
 }

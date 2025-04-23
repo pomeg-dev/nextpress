@@ -26,13 +26,6 @@ class Register_Settings {
     $this->helpers = $helpers;
     $this->settings = $this->build_settings();
     add_action( 'acf/init', [ $this, 'register_general_settings' ] );
-
-    // Add custom user flows.
-    // TODO: set as optional/premium extension.
-    $user_flow = true;
-    if ( $user_flow ) {
-      new User_Flow( $helpers );
-    }
   }
 
   /**

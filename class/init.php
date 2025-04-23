@@ -37,6 +37,9 @@ class Init {
 		new API_Menus( $this->helpers );
 		new API_Theme( $this->helpers );
 
+		// Add user flows.
+		new User_Flow( $this->helpers );
+
 		// Add extensions
 		new Ext_ACF();
 		new Ext_Yoast();
