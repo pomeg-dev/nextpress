@@ -76,7 +76,10 @@ class API_Posts {
       $include_content = isset( $params['include_content'] )
         ? $params['include_content']
         : false;
-      return $this->formatter->format_post( $post, $include_content );
+      $include_metadata = isset( $params['include_metadata'] )
+        ? $params['include_metadata']
+        : true;
+      return $this->formatter->format_post( $post, $include_content, $include_metadata );
     }, $posts );
 
     $response = new \WP_REST_Response( $formatted_posts );
