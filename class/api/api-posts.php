@@ -25,6 +25,11 @@ class API_Posts {
     $this->helpers = $helpers;
     $this->formatter = new Post_Formatter();
 
+    // Adds post_type__not_in param.
+    add_action( 'pre_get_posts', [ $this, '_pre_get_posts' ] );
+    add_filter( 'posts_where', [ $this, '_posts_where' ], 10, 2 );
+    add_filter( 'posts_where_paged', [ $this, '_posts_where' ], 10, 2 );
+
     // Register main posts route.
     add_action('rest_api_init', [ $this, 'register_routes' ] );
   }
@@ -191,5 +196,29 @@ class API_Posts {
     }
 
     return $args;
+  }
+
+  public function _pre_get_posts( $query ) {
+    if ( $post_type__not_in = $query->get( 'post_type__not_in' ) ) {
+      $query->set( 'post_type', 'any' );
+    }
+  }
+
+  public function _posts_where( $where, $query ) {
+    if ( $post_type__not_in = $query->get( 'post_type__not_in' ) ) {
+      global $wpdb;
+      preg_match( "#(AND {$wpdb->posts}.post_type IN) \('([^)]+)'\)#", $where, $matches );
+      if( 3 == count( $matches ) ) {
+        $post_types = explode( "', '", $matches[2] );
+        if ( ! is_array( $post_type__not_in ) ) {
+          $post_type__not_in = array( $post_type__not_in );
+        }
+        $post_type__not_in = array_map( 'esc_sql', $post_type__not_in );
+        $post_types = implode( "','", array_diff( $post_types, $post_type__not_in ) );
+        $new_sql = "{$matches[1]} ('{$post_types}')";
+        $where = str_replace( $matches[0], $new_sql, $where );
+      }
+    }
+    return $where;
   }
 }
