@@ -84,6 +84,7 @@ class Ext_ACF {
         if ( ! $nav_id ) continue;
         if ( $is_block ) {
           $block_data['menus'][ $nav_id ] = wp_get_nav_menu_items( $nav_id );
+          $block_data['menus'][ $nav_id ]['acf_data'] = get_fields( 'term_' . $nav_id );
         } else {
           return wp_get_nav_menu_items( $nav_id );
         }
