@@ -83,8 +83,15 @@ class Ext_ACF {
         $nav_id = $match[1];
         if ( ! $nav_id ) continue;
         if ( $is_block ) {
-          $block_data['menus'][ $nav_id ] = wp_get_nav_menu_items( $nav_id );
-          $block_data['menus'][ $nav_id ]['acf_data'] = get_fields( 'term_' . $nav_id );
+          $menu_items = wp_get_nav_menu_items( $nav_id );
+          foreach ( $menu_items as &$item ) {
+            $acf_fields = get_fields( $item );
+            $acf_fields = $acf_fields ? array_filter( $acf_fields ) : null;
+            if ( $acf_fields ) {
+              $item->acf_data = $acf_fields;
+            }
+          }
+          $block_data['menus'][ $nav_id ] = $menu_items;
         } else {
           return wp_get_nav_menu_items( $nav_id );
         }
