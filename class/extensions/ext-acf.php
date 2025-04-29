@@ -91,7 +91,7 @@ class Ext_ACF {
               $item->acf_data = $acf_fields;
             }
           }
-          $block_data['menus'][ $nav_id ] = $menu_items;
+          $block_data['menus'][ $nav_id ] = (array) $menu_items;
         } else {
           return wp_get_nav_menu_items( $nav_id );
         }
