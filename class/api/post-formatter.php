@@ -51,10 +51,10 @@ class Post_Formatter {
     return apply_filters( 'nextpress_post_object', $formatted_post );
   }
 
-  private function get_slug( $post ) {
+  public function get_slug( $post ) {
     return [
-      'slug' => $post->post_name,
-      'full_path' => $this->get_full_path($post),
+      'slug' => is_numeric( $post ) ? $post : $post->post_name,
+      'full_path' => $this->get_full_path( $post ),
     ];
   }
 

@@ -69,6 +69,9 @@ class API_Posts {
   public function get_posts( $request ) {
     $params = $request->get_params();
     $args = $this->prepare_query_args( $params );
+    if ( isset( $params['slug_only'] ) && $params['slug_only'] ) {
+      $args['fields'] = 'ids';
+    }
     $query = new \WP_Query( $args );
     $posts = $query->posts;
 
@@ -79,7 +82,9 @@ class API_Posts {
       $include_metadata = isset( $params['include_metadata'] )
         ? $params['include_metadata']
         : true;
-      return $this->formatter->format_post( $post, $include_content, $include_metadata );
+      return isset( $params['slug_only'] ) && $params['slug_only']
+        ? $this->formatter->get_slug( $post ) 
+        : $this->formatter->format_post( $post, $include_content, $include_metadata );
     }, $posts );
 
     $response = new \WP_REST_Response( $formatted_posts );
