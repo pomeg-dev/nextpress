@@ -7,6 +7,8 @@
 
 namespace nextpress;
 
+use YahnisElsts\PluginUpdateChecker\v5p5\PucFactory;
+
 defined('ABSPATH') or die('You do not have access to this file');
 
 class Init {
@@ -70,7 +72,7 @@ class Init {
 	public function plugin_update_checker() {
 		require NEXTPRESS_PATH . '/includes/plugin-update-checker/plugin-update-checker.php';
 
-		$update_checker = \Puc_v4_Factory::buildUpdateChecker(
+		$update_checker = PucFactory::buildUpdateChecker(
 			'https://github.com/pomeg-dev/nextpress',
 			__FILE__,
 			'nextpress'
@@ -80,7 +82,7 @@ class Init {
 		// $update_checker->setAuthentication('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');
 
 		//Optional: Set the branch that contains the stable release.
-		$update_checker->setBranch('main');
+		// $update_checker->setBranch('main');
 	}
 
 	/**
