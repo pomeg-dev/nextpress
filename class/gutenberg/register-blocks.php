@@ -64,6 +64,27 @@ class Register_Blocks {
       $block_title = ucwords( str_replace( '-', ' ', $block['blockName'] ) );
       $block_title .= ' (' . ucwords( str_replace( '-', ' ', $theme ) ) . ')';
 
+      // Remove DS_Store.
+      if ( str_contains( $block_title, 'DS_Store' ) ) {
+        continue;
+      }
+
+      // Add theme to categories.
+      if ( $theme ) {
+        add_filter( 'block_categories_all', function( $categories ) use ( $theme ) {
+          return array_merge(
+            $categories,
+            [
+              [
+                'slug' => $theme,
+                'title' => ucwords( str_replace( '-', ' ', $theme ) ),
+                'icon' => 'star-filled',
+              ],
+            ]
+          );
+        }, 10, 1 );
+      }
+
       $block_builder = new FieldsBuilder($theme . '-' . $block['blockName']);
       $this->field_builder->build( $block['fields'], $block_builder );
 
