@@ -77,10 +77,10 @@ class Init {
 		);
 
 		//Optional: If you're using a private repository, specify the access token like this:
-		$update_checker->setAuthentication('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');
+		// $update_checker->setAuthentication('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');
 
 		//Optional: Set the branch that contains the stable release.
-		// $update_checker->setBranch('stable-branch-name');
+		$update_checker->setBranch('main');
 	}
 
 	/**
