@@ -199,7 +199,9 @@ class API_Posts {
       $args['tax_query'][] = [
         'taxonomy' => sanitize_text_field( $taxonomy ),
         'field'    => is_numeric( $tax['terms'] ) ? 'term_id' : 'slug',
-        'terms'    => sanitize_text_field( $tax['terms'] ),
+        'terms'    => is_array( $tax['terms'] ) 
+          ? array_map( 'sanitize_text_field', $tax['terms'] )
+          : sanitize_text_field( $tax['terms'] ),
       ];
     }
 
