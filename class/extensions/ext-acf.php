@@ -83,17 +83,59 @@ class Ext_ACF {
         $nav_id = $match[1];
         if ( ! $nav_id ) continue;
         if ( $is_block ) {
-          $menu_items = wp_get_nav_menu_items( $nav_id );
-          foreach ( $menu_items as &$item ) {
-            $acf_fields = get_fields( $item );
-            $acf_fields = $acf_fields ? array_filter( $acf_fields ) : null;
-            if ( $acf_fields ) {
-              $item->acf_data = $acf_fields;
+          $menu_items = wp_get_nav_menu_items(
+            $nav_id,
+            [
+              'update_post_term_cache' => false,
+              'post_status' => 'publish',
+            ]
+          );
+
+          if ( $menu_items ) {
+            foreach ( $menu_items as &$item ) {
+              $acf_fields = get_fields( $item );
+              $acf_fields = $acf_fields ? array_filter( $acf_fields ) : null;
+              if ( $acf_fields ) {
+                $item->acf_data = $acf_fields;
+              }
             }
+
+            $formatted_items = array_map( function ( $item ) {
+              return [
+                'ID' => $item->ID,
+                'title' => $item->title,
+                'url' => $item->url,
+                'target' => $item->target,
+                'classes' => $item->classes,
+                'menu_item_parent' => $item->menu_item_parent,
+                'acf_data' => $item->acf_data,
+              ];
+            }, $menu_items );
+
+            $block_data['menus'][ $nav_id ] = (array) $formatted_items;
           }
-          $block_data['menus'][ $nav_id ] = (array) $menu_items;
         } else {
-          return wp_get_nav_menu_items( $nav_id );
+          $menu_items = wp_get_nav_menu_items(
+            $nav_id,
+            [
+              'update_post_term_cache' => false,
+              'post_status' => 'publish',
+            ]
+          );
+
+          $formatted_items = array_map( function ( $item ) {
+            return [
+              'ID' => $item->ID,
+              'title' => $item->title,
+              'url' => $item->url,
+              'target' => $item->target,
+              'classes' => $item->classes,
+              'menu_item_parent' => $item->menu_item_parent,
+              'acf_data' => $item->acf_data,
+            ];
+          }, $menu_items );
+          
+          return $formatted_items;
         }
       }
     }

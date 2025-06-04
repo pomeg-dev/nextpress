@@ -96,7 +96,13 @@ class API_Menus {
   }
 
   private function format_menu( $menu ) {
-    $menu_items = wp_get_nav_menu_items( $menu->term_id );
+    $menu_items = wp_get_nav_menu_items(
+      $menu->term_id,
+      [
+        'update_post_term_cache' => false,
+        'post_status' => 'publish',
+      ]
+    );
     $formatted_items = array_map( function ( $item ) {
       return [
         'id' => $item->ID,
