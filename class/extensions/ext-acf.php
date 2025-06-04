@@ -56,7 +56,7 @@ class Ext_ACF {
       ! isset( $block['attrs']['data'] ) ||
       ! isset( $block['attrs']['nextpress_id'] )
     ) {
-      return $block_data;
+      return $this->reduce_image_data( $block_data );
     }
 
     acf_setup_meta(
@@ -68,8 +68,33 @@ class Ext_ACF {
     $fields = get_fields();
     acf_reset_meta( $block['attrs']['name'] );
 
+    // Remove unused image attrs.
+    $fields = $this->reduce_image_data( $fields );
+
     $block_data = $fields;
     return $block_data;
+  }
+
+  private function reduce_image_data( $data ) {
+    if ( ! is_array( $data ) ) return $data;
+    
+    // Check if this is an image array
+    if ( isset( $data['mime_type'] ) && strpos( $data['mime_type'], 'image' ) !== false ) {
+      return [
+        'id' => $data['id'] ?? null,
+        'title' => $data['title'] ?? null,
+        'url' => $data['url'] ?? null,
+        'alt' => $data['alt'] ?? null,
+        'description' => $data['description'] ?? null,
+        'caption' => $data['caption'] ?? null,
+        'width' => $data['width'] ?? null,
+        'height' => $data['height'] ?? null,
+        'sizes' => $data['sizes'] ?? [],
+      ];
+    }
+    
+    // Recursively process array elements
+    return array_map( [$this, 'reduce_image_data' ], $data );
   }
 
   // If you spot a value of {{nav_id-[id]}} in the block data, replace it with the actual menu object
