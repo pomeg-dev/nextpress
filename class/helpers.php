@@ -53,8 +53,8 @@ class Helpers {
     $response = wp_remote_get(
       $blocks_url,
       [
-        'timeout' => 15, // Increase timeout to 15 seconds
-        'sslverify' => ! $this->dev_mode // Only use this for local development!
+        'timeout' => 20,
+        'sslverify' => ! $this->dev_mode
       ]
     );
 
