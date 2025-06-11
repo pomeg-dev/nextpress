@@ -41,43 +41,50 @@ class Helpers {
    * Fetch all themes/blocks from nextjs api
    */
   public function fetch_blocks_from_api( $theme = null ) {
-    $blocks_url = $this->blocks_url;
-    if ( $theme ) {
-      // $theme might be a string or an array of strings.
-      if ( is_array( $theme ) ) {
-        $theme = implode( ',', $theme );
+    $blocks_cache = wp_cache_get( 'next_blocks' );
+
+    if ( ! $blocks_cache ) {
+      $blocks_url = $this->blocks_url;
+      if ( $theme ) {
+        // $theme might be a string or an array of strings.
+        if ( is_array( $theme ) ) {
+          $theme = implode( ',', $theme );
+        }
+        $blocks_url .= '?theme=' . $theme;
       }
-      $blocks_url .= '?theme=' . $theme;
+  
+      $response = wp_remote_get(
+        $blocks_url,
+        [
+          'timeout' => 20,
+          'sslverify' => ! $this->dev_mode
+        ]
+      );
+  
+      if ( is_wp_error( $response ) ) {
+        error_log( 'API request failed: ' . $response->get_error_message() );
+        return false;
+      }
+  
+      $response_code = wp_remote_retrieve_response_code( $response );
+      if ( $response_code !== 200 ) {
+        error_log( 'API request failed with response code: ' . $response_code );
+        return false;
+      }
+  
+      $body = wp_remote_retrieve_body( $response );
+      $data = json_decode( $body, true );
+  
+      if ( json_last_error() !== JSON_ERROR_NONE ) {
+        error_log( 'Failed to parse API response: ' . json_last_error_msg() );
+        return false;
+      }
+  
+      wp_cache_set( 'next_blocks', $data );
+      return $data;
+    } else {
+      return $blocks_cache;
     }
-
-    $response = wp_remote_get(
-      $blocks_url,
-      [
-        'timeout' => 20,
-        'sslverify' => ! $this->dev_mode
-      ]
-    );
-
-    if ( is_wp_error( $response ) ) {
-      error_log( 'API request failed: ' . $response->get_error_message() );
-      return false;
-    }
-
-    $response_code = wp_remote_retrieve_response_code( $response );
-    if ( $response_code !== 200 ) {
-      error_log( 'API request failed with response code: ' . $response_code );
-      return false;
-    }
-
-    $body = wp_remote_retrieve_body( $response );
-    $data = json_decode( $body, true );
-
-    if ( json_last_error() !== JSON_ERROR_NONE ) {
-      error_log( 'Failed to parse API response: ' . json_last_error_msg() );
-      return false;
-    }
-
-    return $data;
   }
 
   /**

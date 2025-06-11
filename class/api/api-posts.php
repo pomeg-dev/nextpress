@@ -72,7 +72,15 @@ class API_Posts {
     if ( isset( $params['slug_only'] ) && $params['slug_only'] ) {
       $args['fields'] = 'ids';
     }
-    $query = new \WP_Query( $args );
+
+    // Use wp caching.
+    $key = serialize( $args );
+    $query = wp_cache_get( $key );
+
+    if ( ! $query ) {
+      $query = new \WP_Query( $args );
+      wp_cache_set( $key, $query, 3600 );
+    }
     $posts = $query->posts;
 
     $formatted_posts = array_map( function ( $post ) use ( $params ) {

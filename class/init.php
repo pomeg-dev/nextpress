@@ -64,6 +64,9 @@ class Init {
 
 		// Disable editing if no blocks founds
 		add_action( 'init', [ $this, 'disable_editing_if_no_blocks' ] );
+
+		// Clear caches if GET param set
+		add_action( 'init', [ $this, 'clear_wp_cache' ] );
 	}
 
 	/**
@@ -172,5 +175,14 @@ class Init {
 				}
 			</style>
 		<?php
+	}
+
+	/**
+	 * Clear caches
+	 */
+	public function clear_wp_cache() {
+		if ( isset( $_GET['clear'] ) ) {
+			wp_cache_delete( 'next_blocks' );
+		}
 	}
 }
