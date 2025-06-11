@@ -74,13 +74,12 @@ class API_Posts {
     }
 
     // Use wp caching.
-    // $key = serialize( $args );
-    // $query = wp_cache_get( $key );
-    // if ( ! $query ) {
-    //   $query = new \WP_Query( $args );
-    //   wp_cache_set( $key, $query, 3600 );
-    // }
-    $query = new \WP_Query( $args );
+    $key = serialize( $args );
+    $query = wp_cache_get( $key );
+    if ( ! $query ) {
+      $query = new \WP_Query( $args );
+      wp_cache_set( $key, $query, 3600 );
+    }
     $posts = $query->posts;
 
     $formatted_posts = array_map( function ( $post ) use ( $params ) {

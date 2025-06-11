@@ -41,9 +41,12 @@ class Helpers {
    * Fetch all themes/blocks from nextjs api
    */
   public function fetch_blocks_from_api( $theme = null ) {
-    $blocks_cache = wp_cache_get( 'next_blocks' );
-
-    if ( ! $blocks_cache ) {
+    $blocks_cache = $theme ? wp_cache_get( 'next_blocks_' . $theme ) : wp_cache_get( 'next_blocks' );
+    
+    if ( $blocks_cache && ! empty( $blocks_cache ) ) {
+      $data = maybe_unserialize( $blocks_cache );
+      return $data;
+    } else {
       $blocks_url = $this->blocks_url;
       if ( $theme ) {
         // $theme might be a string or an array of strings.
@@ -80,10 +83,9 @@ class Helpers {
         return false;
       }
   
-      wp_cache_set( 'next_blocks', $data );
+      $key = $theme ? 'next_blocks_' . $theme : 'next_blocks';
+      wp_cache_set( $key, serialize( $data ) );
       return $data;
-    } else {
-      return $blocks_cache;
     }
   }
 
