@@ -182,7 +182,9 @@ class Init {
 	 */
 	public function clear_wp_cache() {
 		if ( isset( $_GET['clear'] ) ) {
-			wp_cache_delete( 'next_blocks' );
+			$theme = $_GET['clear'];
+			$key = $theme ? 'next_blocks_' . $theme : 'next_blocks';
+			wp_cache_delete( $key );
 		}
 	}
 }
