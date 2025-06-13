@@ -182,9 +182,8 @@ class Init {
 	 */
 	public function clear_wp_cache() {
 		if ( isset( $_GET['clear'] ) ) {
-			$theme = $_GET['clear'];
-			$key = $theme ? 'next_blocks_' . $theme : 'next_blocks';
-			wp_cache_delete( $key );
+			global $wpdb;
+			$wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '%_transient_%'");
 		}
 	}
 }
