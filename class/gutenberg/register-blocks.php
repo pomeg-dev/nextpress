@@ -47,7 +47,7 @@ class Register_Blocks {
     }
 
     $themes = get_field( 'blocks_theme', 'option' );
-    $blocks = $this->helpers->fetch_blocks_from_api( $themes );
+    $blocks = $this->helpers->fetch_blocks_from_api( $themes, 'blocks' );
 
     if ( ! $blocks ) {
       error_log('Failed to fetch blocks from API');

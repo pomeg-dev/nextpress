@@ -188,7 +188,7 @@ class Register_Templates {
    */
   private function create_block_layouts() {
     $theme = get_field( 'blocks_theme', 'option' );
-    $blocks = $this->helpers->fetch_blocks_from_api( $theme );
+    $blocks = $this->helpers->fetch_blocks_from_api( $theme, 'templates' );
     $layouts = [];
 
     foreach ( $blocks as $block ) {

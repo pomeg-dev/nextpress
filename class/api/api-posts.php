@@ -74,11 +74,11 @@ class API_Posts {
     }
 
     // Use wp caching.
-    $key = serialize( $args );
-    $query = wp_cache_get( $key );
+    $key = 'posts_query_' . md5( serialize( $args ) );
+    $query = get_transient( $key );
     if ( ! $query ) {
       $query = new \WP_Query( $args );
-      wp_cache_set( $key, $query, 3600 );
+      set_transient( $key, $query, HOUR_IN_SECONDS );
     }
     $posts = $query->posts;
 

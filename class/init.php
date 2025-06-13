@@ -153,7 +153,7 @@ class Init {
 	 * Disable editing if no blocks founf in fetch_blocks_from_api function
 	 */
 	public function disable_editing_if_no_blocks() {
-		$blocks = $this->helpers->fetch_blocks_from_api();
+		$blocks = $this->helpers->fetch_blocks_from_api( null, 'init' );
 		if (empty($blocks)) {
 			add_filter( 'use_block_editor_for_post', '__return_false' );
 			add_action( 'admin_notices', [ $this, 'no_blocks_notice' ] );

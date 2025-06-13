@@ -40,16 +40,33 @@ class Helpers {
   /**
    * Fetch all themes/blocks from nextjs api
    */
-  public function fetch_blocks_from_api( $theme = null ) {
-    $blocks_cache = $theme ? wp_cache_get( 'next_blocks_' . $theme ) : wp_cache_get( 'next_blocks' );
+  public function fetch_blocks_from_api( $theme = null, $source = '' ) {
+    $cache_parts = ['next_blocks'];
+    if ( $theme ) {
+      if ( is_array( $theme ) ) {
+        sort( $theme );
+        $cache_parts[] = implode( '_', $theme );
+      } else {
+        $cache_parts[] = $theme;
+      }
+    }
+    if ( $source ) {
+      $cache_parts[] = $source;
+    }
     
+    $cache_key = implode( '_', $cache_parts );
+    if ( strlen( $cache_key ) > 150 ) {
+      $cache_key = 'next_blocks_' . md5( $cache_key );
+    }
+    
+    $blocks_cache = get_transient( $cache_key );
+
     if ( $blocks_cache && ! empty( $blocks_cache ) ) {
       $data = maybe_unserialize( $blocks_cache );
       return $data;
     } else {
       $blocks_url = $this->blocks_url;
       if ( $theme ) {
-        // $theme might be a string or an array of strings.
         if ( is_array( $theme ) ) {
           $theme = implode( ',', $theme );
         }
@@ -83,8 +100,7 @@ class Helpers {
         return false;
       }
   
-      $key = $theme ? 'next_blocks_' . $theme : 'next_blocks';
-      wp_cache_set( $key, serialize( $data ) );
+      set_transient( $cache_key, $data, DAY_IN_SECONDS );
       return $data;
     }
   }

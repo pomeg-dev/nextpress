@@ -43,7 +43,7 @@ class Register_Settings {
    * Builds Stoutlogic settings vars
    */
   private function build_settings() {
-    $all_blocks = $this->helpers->fetch_blocks_from_api();
+    $all_blocks = $this->helpers->fetch_blocks_from_api( null, 'settings' );
     $blocks = new FieldsBuilder('blocks');
     $blocks
       ->addTab("blocks")
