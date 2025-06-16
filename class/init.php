@@ -184,6 +184,14 @@ class Init {
 		if ( isset( $_GET['clear'] ) ) {
 			global $wpdb;
 			$wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '%_transient_%'");
+			if (defined('WP_CLI') && WP_CLI) {
+				\WP_CLI::runcommand('transient delete --all --network');
+				$sites = \WP_CLI::runcommand('site list --field=url', ['return' => true]);
+				$site_urls = explode("\n", trim($sites));
+				foreach ($site_urls as $url) {
+					\WP_CLI::runcommand("--url={$url} transient delete --all");
+				}
+			}
 		}
 	}
 }
