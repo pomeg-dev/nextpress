@@ -22,7 +22,7 @@ class Post_Formatter {
       'status' => $post->post_status,
       'date' => $post->post_date,
       'title' => $post->post_title,
-      'excerpt' => ! empty( $post->post_excerpt ) ? $post->post_excerpt : wp_trim_excerpt( '', $post ),
+      'excerpt' => $post->post_excerpt,
       'image' => $this->get_post_image( $post ),
       'categories' => $this->get_post_categories( $post ),
       'tags' => $this->get_post_tags( $post ),
