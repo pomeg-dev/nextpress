@@ -182,6 +182,7 @@ class Init {
 	 */
 	public function clear_wp_cache() {
 		if ( isset( $_GET['clear'] ) ) {
+			wp_cache_flush();
 			global $wpdb;
 			$wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '%_transient_%'");
 			if (defined('WP_CLI') && WP_CLI) {

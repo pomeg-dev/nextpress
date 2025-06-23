@@ -75,10 +75,12 @@ class API_Posts {
 
     // Use wp caching.
     $key = 'posts_query_' . md5( serialize( $args ) );
-    $query = get_transient( $key );
+    // $query = get_transient( $key );
+    $query = wp_cache_get( $key, 'nextpress' );
     if ( ! $query ) {
       $query = new \WP_Query( $args );
-      set_transient( $key, $query, HOUR_IN_SECONDS );
+      // set_transient( $key, $query, HOUR_IN_SECONDS );
+      wp_cache_set( $key, $query, 'nextpress', HOUR_IN_SECONDS );
     }
     $posts = $query->posts;
 
