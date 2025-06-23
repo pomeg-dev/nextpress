@@ -101,7 +101,7 @@ class Helpers {
         return false;
       }
   
-      wp_cache_set( $cache_key, $data, 'nextpress', DAY_IN_SECONDS );
+      wp_cache_set( $cache_key, serialize( $data ), 'nextpress', DAY_IN_SECONDS );
       // set_transient( $cache_key, $data, DAY_IN_SECONDS );
       return $data;
     }
