@@ -59,8 +59,8 @@ class Helpers {
       $cache_key = 'next_blocks_' . md5( $cache_key );
     }
     
-    // $blocks_cache = get_transient( $cache_key );
-    $blocks_cache = wp_cache_get( $cache_key, 'nextpress' );
+    // $blocks_cache = wp_cache_get( $cache_key, 'nextpress' );
+    $blocks_cache = get_transient( $cache_key );
 
     if ( $blocks_cache && ! empty( $blocks_cache ) ) {
       $data = maybe_unserialize( $blocks_cache );
@@ -101,8 +101,8 @@ class Helpers {
         return false;
       }
   
-      wp_cache_set( $cache_key, serialize( $data ), 'nextpress', DAY_IN_SECONDS );
-      // set_transient( $cache_key, $data, DAY_IN_SECONDS );
+      // wp_cache_set( $cache_key, serialize( $data ), 'nextpress', DAY_IN_SECONDS );
+      set_transient( $cache_key, $data, DAY_IN_SECONDS );
       return $data;
     }
   }
