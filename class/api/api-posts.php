@@ -73,14 +73,15 @@ class API_Posts {
       $args['fields'] = 'ids';
     }
 
+    np_dumper( '$args' );
+    np_dumper( $args );
+
     // Use wp caching.
     $key = 'posts_query_' . md5( serialize( $args ) );
     $query = get_transient( $key );
-    // $query = wp_cache_get( $key, 'nextpress' );
     if ( ! $query ) {
       $query = new \WP_Query( $args );
       set_transient( $key, $query, HOUR_IN_SECONDS );
-      // wp_cache_set( $key, $query, 'nextpress', HOUR_IN_SECONDS );
     }
     $posts = $query->posts;
 
@@ -205,12 +206,22 @@ class API_Posts {
     
     // Set tax query for each filter.
     foreach ( $filters as $taxonomy => $tax ) {
+      $terms = $tax['terms'];
+      if ( is_array( $terms ) ) {
+        $all_numeric = !empty( $terms ) && array_reduce( $terms, function( $carry, $term ) {
+          return $carry && is_numeric( $term );
+        }, true );
+        $field = $all_numeric ? 'term_id' : 'slug';
+      } else {
+        $field = is_numeric( $terms ) ? 'term_id' : 'slug';
+      }
+
       $args['tax_query'][] = [
         'taxonomy' => sanitize_text_field( $taxonomy ),
-        'field'    => is_numeric( $tax['terms'] ) ? 'term_id' : 'slug',
-        'terms'    => is_array( $tax['terms'] ) 
-          ? array_map( 'sanitize_text_field', $tax['terms'] )
-          : sanitize_text_field( $tax['terms'] ),
+        'field'    => $field,
+        'terms'    => is_array( $terms ) 
+            ? array_map( 'sanitize_text_field', $terms )
+            : sanitize_text_field( $terms ),
       ];
     }
 
