@@ -36,6 +36,7 @@ class Init {
 		new API_Router( $this->helpers );
 		new API_Settings( $this->helpers );
 		new API_Posts( $this->helpers );
+		new API_Options( $this->helpers );
 		new API_Menus( $this->helpers );
 		new API_Theme( $this->helpers );
 
