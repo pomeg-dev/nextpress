@@ -73,6 +73,16 @@ class API_Posts {
       $args['fields'] = 'ids';
     }
 
+    // If publicly_queryable is true.
+    if ( isset( $args['publicly_queryable'] ) && $args['publicly_queryable'] ) {
+      $queryable_post_types = get_post_types( ['publicly_queryable' => true] );
+      if ( ! in_array( 'page', $queryable_post_types ) ) {
+        $queryable_post_types['page'] = 'page';
+      }
+      unset( $queryable_post_types['attachment'] );
+      $args['post_type'] = $queryable_post_types;
+    }
+
     // Use wp caching.
     $key = 'posts_query_' . md5( serialize( $args ) );
     $query = get_transient( $key );
