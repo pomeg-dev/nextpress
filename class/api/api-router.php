@@ -39,10 +39,11 @@ class API_Router {
   public function register_routes() {
     register_rest_route(
       'nextpress', 
-      '/router(/(?P<path>[a-zA-Z0-9-\/]+))?$',
+      '/router(?:/(?P<path>.+))?',
       [
         'methods' => 'GET',
         'callback' => [ $this, 'get_post_by_path' ],
+        'permission_callback' => '__return_true',
       ]
     );
   }
