@@ -73,9 +73,6 @@ class API_Posts {
       $args['fields'] = 'ids';
     }
 
-    np_dumper( '$args' );
-    np_dumper( $args );
-
     // Use wp caching.
     $key = 'posts_query_' . md5( serialize( $args ) );
     $query = get_transient( $key );
