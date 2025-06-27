@@ -121,45 +121,46 @@ class Register_Blocks {
     $block_name = str_replace('acf/', '', $block['name']);
     $inner_blocks = get_field('inner_blocks');
 
-    $block_html = $this->convert_acf_block_to_string( $block );
-    $block_html = $this->formatter->parse_block_data( $block_html );
+    // $block_html = $this->convert_acf_block_to_string( $block );
+    // $block_html = $this->formatter->parse_block_data( $block_html );
 
-    // Attempt to parse inner blocks and patterns.
-    $block_id = isset( $block_html[0]['id'] ) ? $block_html[0]['id'] : false;
-    $block_html = $this->set_inner_blocks( $block_id, $post_id, $block_html );
+    // // Attempt to parse inner blocks and patterns.
+    // $block_id = isset( $block_html[0]['id'] ) ? $block_html[0]['id'] : false;
+    // $block_html = $this->set_inner_blocks( $block_id, $post_id, $block_html );
 
-    $block_prefix = isset( $block_html[0]['slug'] ) 
-        ? 'field_' . str_replace( 'acf-', '', $block_html[0]['slug'] ) . '-block_'
-        : '';
-    $block_html = json_encode( $block_html, JSON_UNESCAPED_SLASHES );
-    if ( $block_prefix ) {
-        $block_html = str_replace( $block_prefix, '', $block_html );
-    }
+    // $block_prefix = isset( $block_html[0]['slug'] ) 
+    //     ? 'field_' . str_replace( 'acf-', '', $block_html[0]['slug'] ) . '-block_'
+    //     : '';
+    // $block_html = json_encode( $block_html, JSON_UNESCAPED_SLASHES );
+    // if ( $block_prefix ) {
+    //     $block_html = str_replace( $block_prefix, '', $block_html );
+    // }
 
     // Remove modal_content items
-    $pattern = '/"modal_content":\s*(\{(?:[^{}]|(?1))*\})/';
-    $replacement = '"modal_content": null';
-    $block_html = preg_replace( $pattern, $replacement, $block_html );
+    // $pattern = '/"modal_content":\s*(\{(?:[^{}]|(?1))*\})/';
+    // $replacement = '"modal_content": null';
+    // $block_html = preg_replace( $pattern, $replacement, $block_html );
 
-    $encoded_content = urlencode( $this->compress_data( $block_html ) );
-    $frontend_url = $this->helpers->frontend_url;
-    $iframe_id = 'block_preview_' . $block['id'];
+    // $encoded_content = urlencode( $this->compress_data( $block_html ) );
+    // $frontend_url = $this->helpers->frontend_url;
+    // $iframe_id = 'block_preview_' . $block['id'];
     
     // Create a hash of the content for change detection
-    $content_hash = md5($block_html);
+    // $content_hash = md5($block_html);
 
     // Initial iframe with loading state
-    echo "<div id='block_wrapper_{$iframe_id}' class='nextpress-block-wrapper'>";
-    echo "<div id='loading_{$iframe_id}' class='nextpress-loading' style='display: flex; align-items: center; justify-content: center; height: 100px; background: #f0f0f1; border: 1px dashed #ccc;'>";
-    echo "<span>Loading preview...</span>";
-    echo "</div>";
-    echo "<iframe id='{$iframe_id}' style='display: none; pointer-events: none; min-height: 80px; width: 100%; border: none;' data-content-hash='{$content_hash}' data-frontend-url='{$frontend_url}' data-post-id='{$post_id}' data-encoded-content='{$encoded_content}'></iframe>";
-    echo "</div>";
+    // echo "<div id='block_wrapper_{$iframe_id}' class='nextpress-block-wrapper'>";
+    // echo "<div id='loading_{$iframe_id}' class='nextpress-loading' style='display: flex; align-items: center; justify-content: center; height: 100px; background: #f0f0f1; border: 1px dashed #ccc;'>";
+    // echo "<span>Loading preview...</span>";
+    // echo "</div>";
+    // echo "<iframe id='{$iframe_id}' style='display: none; pointer-events: none; min-height: 80px; width: 100%; border: none;' data-content-hash='{$content_hash}' data-frontend-url='{$frontend_url}' data-post-id='{$post_id}' data-encoded-content='{$encoded_content}'></iframe>";
+    // echo "</div>";
 
     // Add the optimized loading and resize script
     ?>
     <script>
     (function() {
+        return;
         var iframeId = '<?php echo $iframe_id; ?>';
         var contentHash = '<?php echo $content_hash; ?>';
         var debounceTimer;
