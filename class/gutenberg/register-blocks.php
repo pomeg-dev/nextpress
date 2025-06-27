@@ -157,6 +157,7 @@ class Register_Blocks {
     // echo "</div>";
 
     // Add the optimized loading and resize script
+    /*
     ?>
     <script>
     (function() {
@@ -349,6 +350,9 @@ class Register_Blocks {
         to { opacity: 1; }
     }
     </style>
+
+    */
+    ?>
 
     <div class="nextpress-block" style="border: 2px solid #007cba; padding: 10px; margin: 0 0 10px; background-color: #f0f0f1;">
         <h4 style="margin: 0; color: #007cba;">Block: <?php echo ucfirst( str_replace( '-', ' ', $block_name ) ); ?></h4>
