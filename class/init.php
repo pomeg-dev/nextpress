@@ -115,9 +115,18 @@ class Init {
 	public function nextpress_redirect_frontend() {
 		// Check for yoast redirects.
     $redirects_json = get_option('wpseo-premium-redirects-base');
+		$permalink = parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH );
+    $permalink = rtrim( 
+      str_replace( 
+        site_url( '/' ), 
+        '',
+        $permalink
+      ), '/'
+    );
+
     if ( $redirects_json ) {
 			foreach ( $redirects_json as $redirect ) {
-				if ( strpos( $_SERVER['REQUEST_URI'], $redirect['origin']) !== false ) {
+				if ( $permalink === $redirect['origin'] ) {
 					wp_redirect( $this->helpers->frontend_url . '/' . ltrim( $redirect['url'] ), 301 );
 					exit;
 				}
