@@ -56,14 +56,14 @@ class API_Router {
     $include_content = $data->get_param( 'include_content' ) !== 'false';
     $is_draft = $data->get_param( 'p' ) !== null;
     
-    // Create cache key based on path and parameters
-    $cache_key = 'nextpress_router_' . md5( serialize( [
-      'path' => $path,
-      'include_content' => $include_content,
-      'is_draft' => $is_draft,
-      'p' => $data->get_param( 'p' ),
-      'page_id' => $data->get_param( 'page_id' )
-    ] ) );
+    // Create optimized cache key
+    $cache_key = $this->generate_router_cache_key( 
+      $path, 
+      $include_content, 
+      $is_draft, 
+      $data->get_param( 'p' ), 
+      $data->get_param( 'page_id' ) 
+    );
     
     // Skip cache for drafts and preview requests
     if ( ! $is_draft ) {
@@ -139,16 +139,155 @@ class API_Router {
   }
 
   /**
-   * Invalidate router cache when posts are updated
+   * Selectively invalidate router cache when posts are updated
    */
   public function invalidate_router_cache( $post_id ) {
-    // Get all transients with nextpress_router_ prefix and delete them
-    global $wpdb;
-    $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_nextpress_router_%'" );
-    $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_nextpress_router_%'" );
+    $post = get_post( $post_id );
+    if ( ! $post ) return;
     
-    // Also clear posts query cache since router depends on it
-    $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_posts_query_%'" );
-    $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_timeout_posts_query_%'" );
+    // Get the paths that need invalidation
+    $paths_to_invalidate = $this->get_paths_to_invalidate( $post );
+    
+    // Invalidate specific cache keys instead of all
+    foreach ( $paths_to_invalidate as $path ) {
+      $this->invalidate_specific_cache_keys( $path );
+    }
+    
+    // Only clear homepage cache if this is the homepage or affects global content
+    if ( $this->affects_homepage( $post ) ) {
+      $this->invalidate_specific_cache_keys( '' ); // Empty path = homepage
+    }
+    
+    // Clear posts query cache only for relevant post types and taxonomies
+    $this->invalidate_posts_query_cache( $post );
+  }
+
+  /**
+   * Get paths that need cache invalidation for a specific post
+   */
+  private function get_paths_to_invalidate( $post ) {
+    $paths = [];
+    
+    // Always invalidate the post's own path
+    $post_path = str_replace( home_url(), '', get_permalink( $post ) );
+    $paths[] = trim( $post_path, '/' );
+    
+    // If it's a page, check for child pages that might be affected
+    if ( $post->post_type === 'page' ) {
+      $child_pages = get_pages( ['child_of' => $post->ID] );
+      foreach ( $child_pages as $child ) {
+        $child_path = str_replace( home_url(), '', get_permalink( $child ) );
+        $paths[] = trim( $child_path, '/' );
+      }
+    }
+    
+    // Add archive pages if this post affects them
+    if ( $post->post_type === 'post' ) {
+      $page_for_posts = get_option( 'page_for_posts' );
+      if ( $page_for_posts ) {
+        $archive_path = str_replace( home_url(), '', get_permalink( $page_for_posts ) );
+        $paths[] = trim( $archive_path, '/' );
+      }
+    }
+    
+    // Add category/taxonomy archive pages
+    $taxonomies = get_object_taxonomies( $post->post_type );
+    foreach ( $taxonomies as $taxonomy ) {
+      $terms = get_the_terms( $post->ID, $taxonomy );
+      if ( $terms && ! is_wp_error( $terms ) ) {
+        foreach ( $terms as $term ) {
+          $term_link = get_term_link( $term );
+          if ( ! is_wp_error( $term_link ) ) {
+            $term_path = str_replace( home_url(), '', $term_link );
+            $paths[] = trim( $term_path, '/' );
+          }
+        }
+      }
+    }
+    
+    return array_unique( array_filter( $paths ) );
+  }
+
+  /**
+   * Invalidate specific cache keys for a given path
+   */
+  private function invalidate_specific_cache_keys( $path ) {
+    // Generate cache keys for different variations of this path
+    $cache_keys = [
+      $this->generate_router_cache_key( $path, true, false, null, null ),   // with content
+      $this->generate_router_cache_key( $path, false, false, null, null ),  // without content
+    ];
+    
+    foreach ( $cache_keys as $key ) {
+      delete_transient( str_replace( 'nextpress_router_', '', $key ) );
+    }
+  }
+
+  /**
+   * Check if post affects homepage
+   */
+  private function affects_homepage( $post ) {
+    // Homepage is affected if:
+    // 1. This IS the homepage
+    // 2. This is a sticky post
+    // 3. This post appears in global widgets/menus
+    // 4. This is the page_for_posts
+    
+    $homepage_id = get_option( 'page_on_front' );
+    $page_for_posts_id = get_option( 'page_for_posts' );
+    
+    return (
+      $post->ID == $homepage_id ||
+      $post->ID == $page_for_posts_id ||
+      is_sticky( $post->ID ) ||
+      $post->post_type === 'nav_menu_item'
+    );
+  }
+
+  /**
+   * Selectively invalidate posts query cache
+   */
+  private function invalidate_posts_query_cache( $post ) {
+    global $wpdb;
+    
+    // Only clear cache for queries that would include this post type
+    $post_type = $post->post_type;
+    
+    // Clear cache keys that might include this post type
+    $wpdb->query( $wpdb->prepare(
+      "DELETE FROM {$wpdb->options} 
+       WHERE option_name LIKE %s 
+       AND (option_name LIKE %s OR option_name LIKE %s)",
+      '_transient_posts_query_%',
+      '%' . $post_type . '%',
+      '%any%'
+    ));
+    
+    $wpdb->query( $wpdb->prepare(
+      "DELETE FROM {$wpdb->options} 
+       WHERE option_name LIKE %s 
+       AND (option_name LIKE %s OR option_name LIKE %s)",
+      '_transient_timeout_posts_query_%',
+      '%' . $post_type . '%',
+      '%any%'
+    ));
+  }
+
+  /**
+   * Generate optimized router cache key
+   */
+  private function generate_router_cache_key( $path, $include_content, $is_draft, $p, $page_id ) {
+    // Build key from simple string concatenation instead of serialize()
+    $key_parts = [
+      'path' => $path ?: 'home',
+      'content' => $include_content ? '1' : '0',
+      'draft' => $is_draft ? '1' : '0',
+      'p' => $p ?: '',
+      'page_id' => $page_id ?: ''
+    ];
+    
+    // Create deterministic string - much faster than serialize()
+    $key_string = implode( '|', array_filter( $key_parts ) );
+    return 'nextpress_router_' . md5( $key_string );
   }
 }

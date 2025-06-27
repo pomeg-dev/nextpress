@@ -30,6 +30,12 @@ class API_Posts {
     add_filter( 'posts_where', [ $this, '_posts_where' ], 10, 2 );
     add_filter( 'posts_where_paged', [ $this, '_posts_where' ], 10, 2 );
 
+    // Add selective cache invalidation
+    add_action( 'save_post', [ $this, 'invalidate_posts_cache' ] );
+    add_action( 'delete_post', [ $this, 'invalidate_posts_cache' ] );
+    add_action( 'wp_trash_post', [ $this, 'invalidate_posts_cache' ] );
+    add_action( 'untrash_post', [ $this, 'invalidate_posts_cache' ] );
+
     // Register main posts route.
     add_action('rest_api_init', [ $this, 'register_routes' ] );
   }
@@ -83,8 +89,8 @@ class API_Posts {
       $args['post_type'] = $queryable_post_types;
     }
 
-    // Use wp caching.
-    $key = 'posts_query_' . md5( serialize( $args ) );
+    // Use wp caching with optimized key generation.
+    $key = $this->generate_cache_key( 'posts_query', $args );
     $query = get_transient( $key );
     if ( ! $query ) {
       $query = new \WP_Query( $args );
@@ -257,5 +263,82 @@ class API_Posts {
       }
     }
     return $where;
+  }
+
+  /**
+   * Generate optimized cache key from args
+   */
+  private function generate_cache_key( $prefix, $args ) {
+    // Extract only the most important cache-affecting parameters
+    $key_parts = [
+      $args['post_type'] ?? 'any',
+      $args['post_status'] ?? 'publish',
+      $args['posts_per_page'] ?? get_option( 'posts_per_page' ),
+      $args['paged'] ?? 1,
+      $args['s'] ?? '',
+      isset( $args['post__in'] ) ? implode( ',', (array) $args['post__in'] ) : '',
+      isset( $args['post__not_in'] ) ? implode( ',', (array) $args['post__not_in'] ) : '',
+      isset( $args['tax_query'] ) ? md5( wp_json_encode( $args['tax_query'] ) ) : '',
+    ];
+    
+    // Create deterministic string and hash it
+    $key_string = implode( '|', array_filter( $key_parts ) );
+    return $prefix . '_' . md5( $key_string );
+  }
+
+  /**
+   * Selectively invalidate posts cache when posts are updated
+   */
+  public function invalidate_posts_cache( $post_id ) {
+    $post = get_post( $post_id );
+    if ( ! $post ) return;
+    
+    global $wpdb;
+    $post_type = $post->post_type;
+    
+    // Get taxonomies for this post to invalidate related taxonomy queries
+    $taxonomies = get_object_taxonomies( $post_type );
+    $taxonomy_terms = [];
+    
+    foreach ( $taxonomies as $taxonomy ) {
+      $terms = get_the_terms( $post->ID, $taxonomy );
+      if ( $terms && ! is_wp_error( $terms ) ) {
+        foreach ( $terms as $term ) {
+          $taxonomy_terms[] = $term->term_id;
+          $taxonomy_terms[] = $term->slug;
+        }
+      }
+    }
+    
+    // Build patterns to match relevant cache keys
+    $patterns = [
+      '%' . $post_type . '%',  // Queries specific to this post type
+      '%any%',                 // Queries that include 'any' post type
+    ];
+    
+    // Add patterns for taxonomy queries
+    foreach ( $taxonomy_terms as $term ) {
+      $patterns[] = '%' . $term . '%';
+    }
+    
+    // Remove duplicate patterns
+    $patterns = array_unique( $patterns );
+    
+    // Delete matching transients
+    foreach ( $patterns as $pattern ) {
+      $wpdb->query( $wpdb->prepare(
+        "DELETE FROM {$wpdb->options} 
+         WHERE option_name LIKE '_transient_posts_query_%' 
+         AND option_name LIKE %s",
+        $pattern
+      ));
+      
+      $wpdb->query( $wpdb->prepare(
+        "DELETE FROM {$wpdb->options} 
+         WHERE option_name LIKE '_transient_timeout_posts_query_%' 
+         AND option_name LIKE %s",
+        $pattern
+      ));
+    }
   }
 }

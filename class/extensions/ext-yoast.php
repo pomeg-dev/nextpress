@@ -30,9 +30,17 @@ class Ext_Yoast {
     // Check for redirects.
     $redirects_json = get_option( 'wpseo-premium-redirects-base' );
     $permalink = get_permalink( $post_id );
+    $permalink = rtrim( 
+      str_replace( 
+        site_url( '/' ), 
+        '',
+        $permalink
+      ), '/'
+    );
+
     if ( $redirects_json && $permalink ) {
       foreach ( $redirects_json as $redirect ) {
-        if ( strpos( $permalink, $redirect['origin'] ) !== false) {
+        if ( $permalink === $redirect['origin'] ) {
           $post['yoastHeadJSON']['redirect'] = $redirect['url'];
         }
       }
@@ -55,9 +63,17 @@ class Ext_Yoast {
   public function include_yoast_404_redirects( $post ) {
     $redirects_json = get_option( 'wpseo-premium-redirects-base' );
     $permalink = parse_url( $_SERVER['REQUEST_URI'], PHP_URL_PATH );
+    $permalink = rtrim( 
+      str_replace( 
+        site_url( '/' ), 
+        '',
+        $permalink
+      ), '/'
+    );
+
     if ( $redirects_json && $permalink ) {
       foreach ( $redirects_json as $redirect ) {
-        if ( strpos($permalink, $redirect['origin'] ) !== false ) {
+        if ( $permalink === $redirect['origin'] ) {
           $post['yoastHeadJSON']['redirect'] = $redirect['url'];
         }
       }
