@@ -43,6 +43,13 @@ class API_Settings {
       [
         'methods' => 'GET',
         'callback' => [ $this, 'get_settings' ],
+        'args' => [
+          'keys' => [
+            'description' => 'Comma-separated list of specific setting keys to return',
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+          ],
+        ],
       ]
     );
   }
@@ -52,13 +59,31 @@ class API_Settings {
       switch_to_blog( get_current_blog_id() );
     }
     
-    $all_settings = apply_filters( "nextpress_settings", wp_load_alloptions() );
+    // Cache settings for 1 hour
+    $cache_key = 'nextpress_settings_' . get_current_blog_id();
+    $all_settings = wp_cache_get( $cache_key );
+    
+    if ( false === $all_settings ) {
+      try {
+        $all_settings = apply_filters( "nextpress_settings", wp_load_alloptions() );
+        wp_cache_set( $cache_key, $all_settings, '', 3600 );
+      } catch ( Exception $e ) {
+        error_log( 'Nextpress settings error: ' . $e->getMessage() );
+        return new \WP_Error( 'settings_error', 'Failed to load settings', array( 'status' => 500 ) );
+      }
+    }
 
     // Add blog page slug.
     $page_for_posts = get_option( 'page_for_posts' );
     $blog_page = get_post( $page_for_posts );
     if ( $blog_page ) {
       $all_settings['page_for_posts_slug'] = $blog_page->post_name;
+    }
+
+    // Filter specific keys if requested
+    if ( isset( $data['keys'] ) && ! empty( $data['keys'] ) ) {
+      $requested_keys = array_map( 'trim', explode( ',', $data['keys'] ) );
+      $all_settings = array_intersect_key( $all_settings, array_flip( $requested_keys ) );
     }
 
     if ( is_multisite() ) {
@@ -69,11 +94,26 @@ class API_Settings {
   }
 
   public function add_acf_to_nextpress_settings( $settings ) {
-    if ( ! function_exists( 'get_fields' ) ) return;
-    $options = get_fields( 'options' );
-    if ( $options ) {
-      $settings = array_merge( $settings, get_fields( 'options' ) );
+    if ( ! function_exists( 'get_fields' ) ) return $settings;
+    
+    try {
+      $cache_key = 'nextpress_acf_options_' . get_current_blog_id();
+      $options = wp_cache_get( $cache_key );
+      
+      if ( false === $options ) {
+        $options = get_fields( 'options' );
+        if ( $options ) {
+          wp_cache_set( $cache_key, $options, '', 1800 ); // 30 min cache
+        }
+      }
+      
+      if ( $options ) {
+        $settings = array_merge( $settings, $options );
+      }
+    } catch ( Exception $e ) {
+      error_log( 'Nextpress ACF options error: ' . $e->getMessage() );
     }
+    
     return $settings;
   }
 
