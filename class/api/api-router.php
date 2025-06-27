@@ -219,8 +219,11 @@ class API_Router {
     ];
     
     foreach ( $cache_keys as $key ) {
-      delete_transient( str_replace( 'nextpress_router_', '', $key ) );
+      delete_transient( $key );
     }
+    
+    // Revalidate Next.js cache for this path
+    $this->helpers->revalidate_fetch_route( $path ?: 'home' );
   }
 
   /**
