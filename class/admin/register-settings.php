@@ -79,6 +79,11 @@ class Register_Settings {
         ],
       ]);
 
+    $favicon = new FieldsBuilder('favicon');
+    $google_tag_manager
+      ->addTab("favicon")
+      ->addImage("favicon");
+
     $page_404 = new FieldsBuilder('page_404');
     $page_404
       ->addTab("404")
@@ -122,6 +127,7 @@ class Register_Settings {
     $settings
       ->addFields($blocks)
       ->addFields($google_tag_manager)
+      ->addFields($favicon)
       ->addFields($page_404)
       ->addFields($coming_soon)
       ->setLocation('options_page', '==', 'acf-options-settings')
