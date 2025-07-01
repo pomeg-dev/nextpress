@@ -111,7 +111,7 @@ class Post_Formatter {
 
   private function get_template_content( $post ) {
     $post_type = get_post_type( $post );
-    $post_categories = wp_get_post_categories( $post->ID, ['fields' => 'ids'] );
+    $post_categories = wp_get_post_categories( $post->ID, ['fields' => 'names'] );
 
     // Try to get post type specific templates
     $templates = get_field( "{$post_type}_content_templates", 'option' );
@@ -128,6 +128,7 @@ class Post_Formatter {
             'after_content' => $this->format_flexible_content( $template['after_content'] ),
             'sidebar_content' => $this->format_flexible_content( $template['sidebar_content'] ),
           ];
+          break;
         }
       }
 
