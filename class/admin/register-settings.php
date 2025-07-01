@@ -80,7 +80,7 @@ class Register_Settings {
       ]);
 
     $favicon = new FieldsBuilder('favicon');
-    $google_tag_manager
+    $favicon
       ->addTab("favicon")
       ->addImage("favicon");
 
