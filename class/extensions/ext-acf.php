@@ -56,7 +56,7 @@ class Ext_ACF {
       ! isset( $block['attrs']['data'] ) ||
       ! isset( $block['attrs']['nextpress_id'] )
     ) {
-      return $this->reduce_image_data( $block_data );
+      return $this->reduce_media_data( $block_data );
     }
 
     acf_setup_meta(
@@ -69,17 +69,29 @@ class Ext_ACF {
     acf_reset_meta( $block['attrs']['name'] );
 
     // Remove unused image attrs.
-    $fields = $this->reduce_image_data( $fields );
+    $fields = $this->reduce_media_data( $fields );
 
     $block_data = $fields;
     return $block_data;
   }
 
-  private function reduce_image_data( $data ) {
+  private function reduce_media_data( $data ) {
     if ( ! is_array( $data ) ) return $data;
     
     // Check if this is an image array
     if ( isset( $data['mime_type'] ) && strpos( $data['mime_type'], 'image' ) !== false ) {
+      if ( isset( $data['sizes'] ) ) {
+        unset( $data['sizes']['medium_large'] );
+        unset( $data['sizes']['medium_large-width'] );
+        unset( $data['sizes']['medium_large-height'] );
+        unset( $data['sizes']['1536x1536'] );
+        unset( $data['sizes']['1536x1536-width'] );
+        unset( $data['sizes']['1536x1536-height'] );
+        unset( $data['sizes']['2048x2048'] );
+        unset( $data['sizes']['2048x2048-width'] );
+        unset( $data['sizes']['2048x2048-height'] );
+      }
+
       return [
         'id' => $data['id'] ?? null,
         'title' => $data['title'] ?? null,
@@ -92,9 +104,24 @@ class Ext_ACF {
         'sizes' => $data['sizes'] ?? [],
       ];
     }
+
+    // Check if this is a video array
+    if ( isset( $data['mime_type'] ) && strpos( $data['mime_type'], 'video' ) !== false ) {
+      return [
+        'id' => $data['id'] ?? null,
+        'title' => $data['title'] ?? null,
+        'url' => $data['url'] ?? null,
+        'alt' => $data['alt'] ?? null,
+        'description' => $data['description'] ?? null,
+        'caption' => $data['caption'] ?? null,
+        'width' => $data['width'] ?? null,
+        'height' => $data['height'] ?? null,
+        'mime_type' => $data['mime_type'] ?? [],
+      ];
+    }
     
     // Recursively process array elements
-    return array_map( [$this, 'reduce_image_data' ], $data );
+    return array_map( [$this, 'reduce_media_data' ], $data );
   }
 
   // If you spot a value of {{nav_id-[id]}} in the block data, replace it with the actual menu object
