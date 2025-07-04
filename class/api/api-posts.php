@@ -148,7 +148,7 @@ class API_Posts {
   public function get_the_term( $request ) {
     $taxonomy = $request->get_param( 'taxonomy' );
     $term_slug = $request->get_param( 'term' );
-    $term = get_term_by( 'name', $term_slug, $taxonomy );
+    $term = get_term_by( 'slug', $term_slug, $taxonomy );
     if ( $term && ! is_wp_error( $term ) ) {
       $response = new \WP_REST_Response( apply_filters( 'nextpress_term_object', $term ) );
       return $response;
