@@ -70,6 +70,9 @@ class Ext_Yoast {
         $permalink
       ), '/'
     );
+    if ( strpos( $permalink, '/router/' ) !== false ) {
+      $permalink = substr( $permalink, strpos( $permalink, '/router/' ) + strlen( '/router/' ) );
+    }
 
     if ( $redirects_json && $permalink ) {
       foreach ( $redirects_json as $redirect ) {
