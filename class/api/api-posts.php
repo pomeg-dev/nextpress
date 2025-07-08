@@ -94,7 +94,7 @@ class API_Posts {
     $query = get_transient( $key );
     if ( ! $query ) {
       $query = new \WP_Query( $args );
-      set_transient( $key, $query, HOUR_IN_SECONDS );
+      set_transient( $key, $query );
     }
     $posts = $query->posts;
 

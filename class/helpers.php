@@ -100,7 +100,7 @@ class Helpers {
         return false;
       }
   
-      set_transient( $cache_key, $data, DAY_IN_SECONDS );
+      set_transient( $cache_key, $data );
       return $data;
     }
   }

@@ -132,7 +132,7 @@ class API_Router {
     
     // Cache the result (skip for drafts)
     if ( ! $is_draft ) {
-      set_transient( $cache_key, $formatted_post, HOUR_IN_SECONDS );
+      set_transient( $cache_key, $formatted_post );
     }
     
     return $formatted_post;
