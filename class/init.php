@@ -77,7 +77,7 @@ class Init {
 
 		$update_checker = PucFactory::buildUpdateChecker(
 			'https://github.com/pomeg-dev/nextpress',
-			__FILE__,
+			NEXTPRESS_PATH . '/nextpress.php',
 			'nextpress'
 		);
 
