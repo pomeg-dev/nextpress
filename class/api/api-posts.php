@@ -298,6 +298,13 @@ class API_Posts {
       return;
     }
 
+    // Debounce.
+    $transient_key = 'post_cache_debounce_' . $post_id;
+    if ( get_transient( $transient_key ) ) {
+      return;
+    }
+    set_transient( $transient_key, true, 10 );
+
     $post = get_post( $post_id );
     if ( ! $post ) return;
     
