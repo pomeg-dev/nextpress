@@ -290,11 +290,30 @@ class API_Posts {
    * Selectively invalidate posts cache when posts are updated
    */
   public function invalidate_posts_cache( $post_id ) {
+    // Early returns.
+    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+      return;
+    }
+    if ( wp_is_post_revision( $post_id ) ) {
+      return;
+    }
+
     $post = get_post( $post_id );
     if ( ! $post ) return;
     
-    global $wpdb;
     $post_type = $post->post_type;
+    if ( $post_type === "nav_menu_item" ) return;
+
+    // Revalidate ID.
+    $this->helpers->revalidate_fetch_route( "post-id-{$post_id}" );
+
+    // Revalidate context.
+    $this->helpers->revalidate_fetch_route( "posts-feed" );
+    
+    // Revalidate cpt.
+    $this->helpers->revalidate_fetch_route( "post-type-{$post_type}" );
+    
+    global $wpdb;
     
     // Get taxonomies for this post to invalidate related taxonomy queries
     $taxonomies = get_object_taxonomies( $post_type );

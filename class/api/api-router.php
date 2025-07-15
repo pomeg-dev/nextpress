@@ -142,6 +142,14 @@ class API_Router {
    * Selectively invalidate router cache when posts are updated
    */
   public function invalidate_router_cache( $post_id ) {
+    // Early returns.
+    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+      return;
+    }
+    if ( wp_is_post_revision( $post_id ) ) {
+      return;
+    }
+
     $post = get_post( $post_id );
     if ( ! $post ) return;
     
@@ -151,11 +159,13 @@ class API_Router {
     // Invalidate specific cache keys instead of all
     foreach ( $paths_to_invalidate as $path ) {
       $this->invalidate_specific_cache_keys( $path );
+      $this->helpers->revalidate_specific_path( '/' . $path );
     }
     
     // Only clear homepage cache if this is the homepage or affects global content
     if ( $this->affects_homepage( $post ) ) {
-      $this->invalidate_specific_cache_keys( '' ); // Empty path = homepage
+      $this->invalidate_specific_cache_keys( '' );
+      $this->helpers->revalidate_specific_path( '/' );
     }
     
     // Clear posts query cache only for relevant post types and taxonomies
@@ -171,15 +181,6 @@ class API_Router {
     // Always invalidate the post's own path
     $post_path = str_replace( home_url(), '', get_permalink( $post ) );
     $paths[] = trim( $post_path, '/' );
-    
-    // If it's a page, check for child pages that might be affected
-    if ( $post->post_type === 'page' ) {
-      $child_pages = get_pages( ['child_of' => $post->ID] );
-      foreach ( $child_pages as $child ) {
-        $child_path = str_replace( home_url(), '', get_permalink( $child ) );
-        $paths[] = trim( $child_path, '/' );
-      }
-    }
     
     // Add archive pages if this post affects them
     if ( $post->post_type === 'post' ) {
@@ -221,9 +222,6 @@ class API_Router {
     foreach ( $cache_keys as $key ) {
       delete_transient( $key );
     }
-    
-    // Revalidate Next.js cache for this path
-    $this->helpers->revalidate_fetch_route( $path ?: 'home' );
   }
 
   /**

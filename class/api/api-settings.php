@@ -65,7 +65,7 @@ class API_Settings {
     
     if ( false === $all_settings ) {
       try {
-        $all_settings = apply_filters( "nextpress_settings", wp_load_alloptions() );
+        $all_settings = apply_filters( "nextpress_settings", $this->load_options_without_transients() );
         wp_cache_set( $cache_key, $all_settings, '', 3600 );
       } catch ( Exception $e ) {
         error_log( 'Nextpress settings error: ' . $e->getMessage() );
@@ -91,6 +91,28 @@ class API_Settings {
     }
 
     return $all_settings;
+  }
+
+  /**
+   * Load options without transients for better performance
+   */
+  private function load_options_without_transients() {
+    global $wpdb;
+    
+    $query = "SELECT option_name, option_value FROM {$wpdb->options} 
+              WHERE autoload = 'yes' 
+              AND option_name NOT LIKE '_transient_%' 
+              AND option_name NOT LIKE '_site_transient_%'
+              ORDER BY option_name";
+    
+    $results = $wpdb->get_results( $query );
+    $options = array();
+    
+    foreach ( $results as $row ) {
+      $options[ $row->option_name ] = maybe_unserialize( $row->option_value );
+    }
+    
+    return $options;
   }
 
   public function add_acf_to_nextpress_settings( $settings ) {

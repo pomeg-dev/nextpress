@@ -52,8 +52,6 @@ class Init {
 		new Register_Blocks( $this->helpers );
 
 		// Add revalidators
-		add_action( 'save_post', [ $this, 'revalidate_posts' ] );
-		add_action( 'save_post', [ $this, 'revalidate_menus' ], 10, 2 );
 		add_action( 'acf/save_post', [ $this, 'revalidate_settings' ] );
 
 		// Add redirects
@@ -89,24 +87,12 @@ class Init {
 	}
 
 	/**
-	 * Revalidate routes
+	 * Revalidate settings
 	 */
-	public function revalidate_posts() {
-		$response[0] = $this->helpers->revalidate_fetch_route( 'post' );
-		$response[1] = $this->helpers->revalidate_fetch_route( 'posts' );
-		return $response;
-	}
-	public function revalidate_menus( $post_id, $post ) {
-		if ( ! in_array( $post->post_type, [ 'nav_menu_item' ] ) ) return;
-		$response = $this->helpers->revalidate_fetch_route( 'menus' );
-		$response = $this->helpers->revalidate_fetch_route( 'settings' );
-		return $response;
-	}
 	public function revalidate_settings() {
 		$screen = get_current_screen();
-		if ( strpos( $screen->id, 'nextpress' ) === false) return;
-		$response = $this->helpers->revalidate_fetch_route( 'settings' );
-		return $response;
+		if ( strpos( $screen->id, 'acf-options-settings' ) === false) return;
+		$this->helpers->revalidate_fetch_route( 'settings' );
 	}
 
 	/**

@@ -114,6 +114,14 @@ class Helpers {
   }
 
   /**
+   * Revalidate specific Next.js path.
+   */
+  public function revalidate_specific_path( $path ) {
+    $request_url = $this->api_url . "/revalidate?path=" . urlencode( $path );
+    return wp_remote_get( $request_url );
+  }
+
+  /**
    * Get homepage post object.
    */
   public function get_homepage() {
