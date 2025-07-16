@@ -34,6 +34,10 @@ class API_Settings {
 
     // Format default template content.
     add_filter( 'nextpress_settings', [ $this, 'format_default_template'] );
+
+    // Add revalidators
+		add_action( 'acf/options_page/save', [ $this, 'revalidate_settings' ], 10, 2 );
+		add_action( 'save_post', [ $this, 'revalidate_menu_settings' ] );
   }
 
   public function register_routes() {
@@ -58,15 +62,19 @@ class API_Settings {
     if ( is_multisite() ) {
       switch_to_blog( get_current_blog_id() );
     }
+
+    if ( isset( $data['keys'] ) && ! empty( $data['keys'] ) ) {
+      $requested_keys = array_map( 'trim', explode( ',', $data['keys'] ) );
+    }
     
-    // Cache settings for 1 hour
+    // Cache settings for 1 day
     $cache_key = 'nextpress_settings_' . get_current_blog_id();
     $all_settings = wp_cache_get( $cache_key );
     
     if ( false === $all_settings ) {
       try {
         $all_settings = apply_filters( "nextpress_settings", $this->load_options_without_transients() );
-        wp_cache_set( $cache_key, $all_settings, '', 3600 );
+        wp_cache_set( $cache_key, $all_settings, '', DAY_IN_SECONDS );
       } catch ( Exception $e ) {
         error_log( 'Nextpress settings error: ' . $e->getMessage() );
         return new \WP_Error( 'settings_error', 'Failed to load settings', array( 'status' => 500 ) );
@@ -125,7 +133,7 @@ class API_Settings {
       if ( false === $options ) {
         $options = get_fields( 'options' );
         if ( $options ) {
-          wp_cache_set( $cache_key, $options, '', 1800 ); // 30 min cache
+          wp_cache_set( $cache_key, $options, '', DAY_IN_SECONDS );
         }
       }
       
@@ -152,6 +160,7 @@ class API_Settings {
       is_array( $settings['default_after_content'] )
     ) {
       $settings['after_content'] = $this->formatter->format_flexible_content( $settings['default_after_content'] );
+      unset( $settings['default_after_content'] );
     }
 
     if (
@@ -159,8 +168,56 @@ class API_Settings {
       is_array( $settings['default_before_content'] )
     ) {
       $settings['before_content'] = $this->formatter->format_flexible_content( $settings['default_before_content'] );
+      unset( $settings['default_before_content'] );
     }
 
     return $settings;
   }
+
+  /**
+	 * Revalidate settings
+	 */
+	public function revalidate_settings( $post_id, $menu_slug ) {
+		if ( ! $post_id && ! $menu_slug ) return;
+		if ( $post_id !== 'options' ) return;
+
+		// Flush wp cache.
+		$cache_key = 'nextpress_settings_' . get_current_blog_id();
+		wp_cache_delete( $cache_key );
+
+		// Revalidate nextjs.
+		if ( $menu_slug === 'templates' ) {
+			$this->helpers->revalidate_fetch_route( 'before_content' );
+			$this->helpers->revalidate_fetch_route( 'after_content' );
+		} else {
+			$this->helpers->revalidate_fetch_route( 'settings' );
+		}
+	}
+
+  /**
+	 * Revalidate menu settings
+	 */
+	public function revalidate_menu_settings( $post_id ) {
+		// Early returns.
+    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+      return;
+    }
+    if ( wp_is_post_revision( $post_id ) ) {
+      return;
+    }
+
+    // Debounce.
+    $transient_key = 'menu_cache_debounce';
+    if ( get_transient( $transient_key ) ) {
+      return;
+    }
+    set_transient( $transient_key, true, 10 );
+
+    $post = get_post( $post_id );
+    if ( ! $post ) return;
+    if ( $post->post_type !== "nav_menu_item" ) return;
+
+    $this->helpers->revalidate_fetch_route( 'before_content' );
+    $this->helpers->revalidate_fetch_route( 'after_content' );
+	}
 }

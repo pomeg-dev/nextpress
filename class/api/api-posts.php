@@ -74,6 +74,21 @@ class API_Posts {
 
   public function get_posts( $request ) {
     $params = $request->get_params();
+
+    // Set cache tags.
+    $cache_tag = isset( $params['cache_tag'] ) && $params['cache_tag'] 
+      ? $params['cache_tag'] 
+      : false;
+    
+    if ( $cache_tag ) {
+      $cached_tags = get_transient( 'np_cache_tags' ) ?: [];
+      $cached_tags[] = $cache_tag;
+      $cached_tags = array_unique( $cached_tags );
+      $set = set_transient( 'np_cache_tags', $cached_tags, HOUR_IN_SECONDS );
+      unset( $params['cache_tag'] );
+    }
+
+    // Run query.
     $args = $this->prepare_query_args( $params );
     if ( isset( $params['slug_only'] ) && $params['slug_only'] ) {
       $args['fields'] = 'ids';
@@ -311,14 +326,25 @@ class API_Posts {
     $post_type = $post->post_type;
     if ( $post_type === "nav_menu_item" ) return;
 
-    // Revalidate ID.
-    $this->helpers->revalidate_fetch_route( "post-id-{$post_id}" );
-
-    // Revalidate context.
-    $this->helpers->revalidate_fetch_route( "posts-feed" );
+    // Revalidate post IDs.
+    $ids_revalidated = false;
+    $cached_tags = get_transient( 'np_cache_tags' ) ?: [];
+    if ( $cached_tags ) {
+      foreach ( $cached_tags as $tag ) {
+        if ( preg_match( '/post-ids-(.+)/', $tag, $matches ) ) {
+          $post_ids = explode( '-', $matches[1] );
+          if ( in_array( $post_id, $post_ids ) ) {
+            $this->helpers->revalidate_fetch_route( $tag );
+            $ids_revalidated = true;
+          }
+        }
+      }
+    }
     
     // Revalidate cpt.
-    $this->helpers->revalidate_fetch_route( "post-type-{$post_type}" );
+    if ( ! $ids_revalidated ) {
+      $this->helpers->revalidate_fetch_route( "post-type-{$post_type}" );
+    }
     
     global $wpdb;
     

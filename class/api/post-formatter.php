@@ -141,15 +141,6 @@ class Post_Formatter {
         ];
       }
     }
-
-    // If no template found for the post type, use the global default
-    $default_before_content = get_field( 'default_before_content', 'option' );
-    $default_after_content = get_field( 'default_after_content', 'option' );
-
-    return [
-      'before_content' => $this->format_flexible_content( $default_before_content ),
-      'after_content' => $this->format_flexible_content( $default_after_content ),
-    ];
   }
 
   public function format_flexible_content( $flexible_content ) {

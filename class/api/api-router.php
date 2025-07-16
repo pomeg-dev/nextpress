@@ -159,6 +159,7 @@ class API_Router {
 
     $post = get_post( $post_id );
     if ( ! $post ) return;
+    if ( $post->post_type === "nav_menu_item" ) return;
     
     // Get the paths that need invalidation
     $paths_to_invalidate = $this->get_paths_to_invalidate( $post );

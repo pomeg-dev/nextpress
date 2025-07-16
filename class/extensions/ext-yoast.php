@@ -41,7 +41,7 @@ class Ext_Yoast {
     if ( $redirects_json && $permalink ) {
       foreach ( $redirects_json as $redirect ) {
         if ( $permalink === $redirect['origin'] ) {
-          $post['yoastHeadJSON']['redirect'] = $redirect['url'];
+          $post['yoastHeadJSON']['redirect'] = rtrim( $redirect['url'], '/') . '/';
         }
       }
     }
@@ -77,7 +77,7 @@ class Ext_Yoast {
     if ( $redirects_json && $permalink ) {
       foreach ( $redirects_json as $redirect ) {
         if ( $permalink === $redirect['origin'] ) {
-          $post['yoastHeadJSON']['redirect'] = $redirect['url'];
+          $post['yoastHeadJSON']['redirect'] = rtrim( $redirect['url'], '/') . '/';
         }
       }
     }

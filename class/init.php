@@ -51,9 +51,6 @@ class Init {
 		// Register gutenberg block fields
 		new Register_Blocks( $this->helpers );
 
-		// Add revalidators
-		add_action( 'acf/save_post', [ $this, 'revalidate_settings' ] );
-
 		// Add redirects
 		add_action( 'template_redirect', [ $this, 'nextpress_redirect_frontend' ] );
 		
@@ -84,15 +81,6 @@ class Init {
 
 		//Optional: Set the branch that contains the stable release.
 		// $update_checker->setBranch('main');
-	}
-
-	/**
-	 * Revalidate settings
-	 */
-	public function revalidate_settings() {
-		$screen = get_current_screen();
-		if ( strpos( $screen->id, 'acf-options-settings' ) === false) return;
-		$this->helpers->revalidate_fetch_route( 'settings' );
 	}
 
 	/**
