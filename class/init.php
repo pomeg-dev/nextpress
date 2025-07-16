@@ -120,6 +120,15 @@ class Init {
 			$page_id = $query_params['page_id'];
 			$req = '/api/draft?secret=<token>&id=' . $page_id;
 		}
+
+		if (
+			strpos($req, 'wp-admin') !== false ||
+			strpos($req, 'wp-login') !== false ||
+			strpos($req, 'index.php') !== false
+		) {
+			return;
+		}
+
 		wp_redirect( $this->helpers->frontend_url . $req, 301 );
 		exit;
 	}
