@@ -121,10 +121,6 @@ class API_Router {
 
     if ( ! $post ) {
       $not_found_result = apply_filters( 'nextpress_post_not_found', [ '404' => true ] );
-      // Cache 404 results for shorter time
-      if ( ! $is_draft ) {
-        set_transient( $cache_key, $not_found_result, 5 * MINUTE_IN_SECONDS );
-      }
       return $not_found_result;
     }
 
