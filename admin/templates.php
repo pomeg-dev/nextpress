@@ -51,7 +51,7 @@ function create_block_layouts()
     foreach ($blocks as $block) {
         $layout = new FieldsBuilder($block['id']);
         $layout = build_acf_fields($block['fields'], $layout);
-        $layouts[$block['id']] = $layout;
+        $layouts[$block['id']] = apply_filters( 'nextpress_block_layouts', $layout );
     }
 
     return $layouts;
