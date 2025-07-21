@@ -27,6 +27,7 @@ class API_Router {
     add_action('rest_api_init', [ $this, 'register_routes' ] );
     
     // Add cache invalidation hooks
+    add_action( 'pre_post_update', [ $this, 'invalidate_old_url' ] );
     add_action( 'save_post', [ $this, 'invalidate_router_cache' ] );
     add_action( 'delete_post', [ $this, 'invalidate_router_cache' ] );
     add_action( 'wp_trash_post', [ $this, 'invalidate_router_cache' ] );
@@ -132,6 +133,28 @@ class API_Router {
     }
     
     return $formatted_post;
+  }
+
+  /**
+   * Invalidate router cache for current post.
+   */
+  public function invalidate_old_url( $post_id ) {
+     // Early returns.
+    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+      return;
+    }
+    if ( wp_is_post_revision( $post_id ) ) {
+      return;
+    }
+
+    $post = get_post( $post_id );
+    if ( ! $post ) return;
+    if ( $post->post_type === "nav_menu_item" ) return;
+
+    $post_path = str_replace( home_url(), '', get_permalink( $post ) );
+    $post_path = trim( $post_path, '/' );
+    $this->invalidate_specific_cache_keys( $post_path );
+    $this->helpers->revalidate_specific_path( '/' . $post_path );
   }
 
   /**
