@@ -55,16 +55,13 @@ class API_Router {
   public function get_post_by_path( $data ) {
     $path = apply_filters( 'nextpress_path', $data['path'] );
     $include_content = $data->get_param( 'include_content' ) !== 'false';
-    $is_draft = $data->get_param( 'p' ) !== null;
-    
-    // Create optimized cache key
-    $cache_key = $this->generate_router_cache_key( 
-      $path, 
-      $include_content, 
-      $is_draft, 
-      $data->get_param( 'p' ), 
-      $data->get_param( 'page_id' ) 
-    );
+    $is_draft = $data->get_param( 'p' ) !== null && $data->get_param( 'preview' );
+
+    if ( $is_draft && is_numeric( $is_draft ) ) {
+      $post = get_post( $data->get_param( 'p' ) );
+      $formatted_post = $this->formatter->format_post( $post, $include_content );
+      return $formatted_post;
+    }
     
     $page_for_posts_id = get_option( 'page_for_posts' );
     $page_for_posts_url = get_permalink( get_option( 'page_for_posts' ) );
@@ -87,38 +84,11 @@ class API_Router {
     }
 
     if ( ! $post ) {
-      $path_parts = explode( '/', $path );
-      $slug = end( $path_parts );
-
-      $post_status = ['draft', 'pending', 'auto-draft', 'future', 'private', 'revision'];
-      $post = get_posts(
-        [
-          'post_type' => 'any',
-          'post_status' => $post_status,
-          'name' => $slug,
-          'posts_per_page' => 1
-        ]
-      );
-      $post = ! empty( $post ) ? $post[0] : null;
-      if ( ! $post ) {
-        $post = get_posts(
-          [
-            'post_status' => $post_status,
-            'title' => $slug,
-            'posts_per_page' => 1
-          ]
-        );
-        $post = ! empty( $post ) ? $post[0] : null;
-      }
-    }
-
-    if ( ! $post ) {
       $not_found_result = apply_filters( 'nextpress_post_not_found', [ '404' => true ] );
       return $not_found_result;
     }
 
     $formatted_post = $this->formatter->format_post( $post, $include_content );
-    
     return $formatted_post;
   }
 
@@ -214,38 +184,12 @@ class API_Router {
    * Check if post affects homepage
    */
   private function affects_homepage( $post ) {
-    // Homepage is affected if:
-    // 1. This IS the homepage
-    // 2. This is a sticky post
-    // 3. This post appears in global widgets/menus
-    // 4. This is the page_for_posts
-    
     $homepage_id = get_option( 'page_on_front' );
     $page_for_posts_id = get_option( 'page_for_posts' );
     
     return (
       $post->ID == $homepage_id ||
-      $post->ID == $page_for_posts_id ||
-      is_sticky( $post->ID ) ||
-      $post->post_type === 'nav_menu_item'
+      $post->ID == $page_for_posts_id
     );
-  }
-
-  /**
-   * Generate optimized router cache key
-   */
-  private function generate_router_cache_key( $path, $include_content, $is_draft, $p, $page_id ) {
-    // Build key from simple string concatenation instead of serialize()
-    $key_parts = [
-      'path' => $path ?: 'home',
-      'content' => $include_content ? '1' : '0',
-      'draft' => $is_draft ? '1' : '0',
-      'p' => $p ?: '',
-      'page_id' => $page_id ?: ''
-    ];
-    
-    // Create deterministic string - much faster than serialize()
-    $key_string = implode( '|', array_filter( $key_parts ) );
-    return 'nextpress_router_' . md5( $key_string );
   }
 }
