@@ -55,14 +55,6 @@ class API_Router {
   public function get_post_by_path( $data ) {
     $path = apply_filters( 'nextpress_path', $data['path'] );
     $include_content = $data->get_param( 'include_content' ) !== 'false';
-    $is_draft = $data->get_param( 'p' ) !== null && $data->get_param( 'preview' );
-
-    if ( $is_draft && is_numeric( $is_draft ) ) {
-      $post = get_post( $data->get_param( 'p' ) );
-      $formatted_post = $this->formatter->format_post( $post, $include_content );
-      return $formatted_post;
-    }
-    
     $page_for_posts_id = get_option( 'page_for_posts' );
     $page_for_posts_url = get_permalink( get_option( 'page_for_posts' ) );
     $page_for_posts_path = trim( str_replace( site_url(), '', $page_for_posts_url ), '/' );
