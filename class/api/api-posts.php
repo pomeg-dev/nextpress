@@ -84,7 +84,7 @@ class API_Posts {
       $cached_tags = get_transient( 'np_cache_tags' ) ?: [];
       $cached_tags[] = $cache_tag;
       $cached_tags = array_unique( $cached_tags );
-      $set = set_transient( 'np_cache_tags', $cached_tags, HOUR_IN_SECONDS );
+      set_transient( 'np_cache_tags', $cached_tags, HOUR_IN_SECONDS );
       unset( $params['cache_tag'] );
     }
 
@@ -106,11 +106,7 @@ class API_Posts {
 
     // Use wp caching with optimized key generation.
     $key = $this->generate_cache_key( 'posts_query', $args );
-    $query = get_transient( $key );
-    if ( ! $query ) {
-      $query = new \WP_Query( $args );
-      set_transient( $key, $query );
-    }
+    $query = new \WP_Query( $args );
     $posts = $query->posts;
 
     $formatted_posts = array_map( function ( $post ) use ( $params ) {
@@ -313,13 +309,6 @@ class API_Posts {
       return;
     }
 
-    // Debounce.
-    $transient_key = 'post_cache_debounce_' . $post_id;
-    if ( get_transient( $transient_key ) ) {
-      return;
-    }
-    set_transient( $transient_key, true, 10 );
-
     $post = get_post( $post_id );
     if ( ! $post ) return;
     
@@ -344,53 +333,6 @@ class API_Posts {
     // Revalidate cpt.
     if ( ! $ids_revalidated ) {
       $this->helpers->revalidate_fetch_route( "post-type-{$post_type}" );
-    }
-    
-    global $wpdb;
-    
-    // Get taxonomies for this post to invalidate related taxonomy queries
-    $taxonomies = get_object_taxonomies( $post_type );
-    $taxonomy_terms = [];
-    
-    foreach ( $taxonomies as $taxonomy ) {
-      $terms = get_the_terms( $post->ID, $taxonomy );
-      if ( $terms && ! is_wp_error( $terms ) ) {
-        foreach ( $terms as $term ) {
-          $taxonomy_terms[] = $term->term_id;
-          $taxonomy_terms[] = $term->slug;
-        }
-      }
-    }
-    
-    // Build patterns to match relevant cache keys
-    $patterns = [
-      '%' . $post_type . '%',  // Queries specific to this post type
-      '%any%',                 // Queries that include 'any' post type
-    ];
-    
-    // Add patterns for taxonomy queries
-    foreach ( $taxonomy_terms as $term ) {
-      $patterns[] = '%' . $term . '%';
-    }
-    
-    // Remove duplicate patterns
-    $patterns = array_unique( $patterns );
-    
-    // Delete matching transients
-    foreach ( $patterns as $pattern ) {
-      $wpdb->query( $wpdb->prepare(
-        "DELETE FROM {$wpdb->options} 
-         WHERE option_name LIKE '_transient_posts_query_%' 
-         AND option_name LIKE %s",
-        $pattern
-      ));
-      
-      $wpdb->query( $wpdb->prepare(
-        "DELETE FROM {$wpdb->options} 
-         WHERE option_name LIKE '_transient_timeout_posts_query_%' 
-         AND option_name LIKE %s",
-        $pattern
-      ));
     }
   }
 }

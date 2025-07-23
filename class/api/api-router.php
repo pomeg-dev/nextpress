@@ -66,14 +66,6 @@ class API_Router {
       $data->get_param( 'page_id' ) 
     );
     
-    // Skip cache for drafts and preview requests
-    if ( ! $is_draft ) {
-      $cached_post = get_transient( $cache_key );
-      if ( $cached_post !== false ) {
-        return $cached_post;
-      }
-    }
-    
     $page_for_posts_id = get_option( 'page_for_posts' );
     $page_for_posts_url = get_permalink( get_option( 'page_for_posts' ) );
     $page_for_posts_path = trim( str_replace( site_url(), '', $page_for_posts_url ), '/' );
@@ -127,11 +119,6 @@ class API_Router {
 
     $formatted_post = $this->formatter->format_post( $post, $include_content );
     
-    // Cache the result (skip for drafts)
-    if ( ! $is_draft ) {
-      set_transient( $cache_key, $formatted_post );
-    }
-    
     return $formatted_post;
   }
 
@@ -153,7 +140,6 @@ class API_Router {
 
     $post_path = str_replace( home_url(), '', get_permalink( $post ) );
     $post_path = trim( $post_path, '/' );
-    $this->invalidate_specific_cache_keys( $post_path );
     $this->helpers->revalidate_specific_path( '/' . $post_path );
   }
 
@@ -168,13 +154,6 @@ class API_Router {
     if ( wp_is_post_revision( $post_id ) ) {
       return;
     }
-    
-    // Debounce.
-    $transient_key = 'router_cache_debounce_' . $post_id;
-    if ( get_transient( $transient_key ) ) {
-      return;
-    }
-    set_transient( $transient_key, true, 10 );
 
     $post = get_post( $post_id );
     if ( ! $post ) return;
@@ -185,18 +164,13 @@ class API_Router {
     
     // Invalidate specific cache keys instead of all
     foreach ( $paths_to_invalidate as $path ) {
-      $this->invalidate_specific_cache_keys( $path );
       $this->helpers->revalidate_specific_path( '/' . $path );
     }
     
     // Only clear homepage cache if this is the homepage or affects global content
     if ( $this->affects_homepage( $post ) ) {
-      $this->invalidate_specific_cache_keys( '' );
       $this->helpers->revalidate_specific_path( '/' );
     }
-    
-    // Clear posts query cache only for relevant post types and taxonomies
-    $this->invalidate_posts_query_cache( $post );
   }
 
   /**
@@ -237,21 +211,6 @@ class API_Router {
   }
 
   /**
-   * Invalidate specific cache keys for a given path
-   */
-  private function invalidate_specific_cache_keys( $path ) {
-    // Generate cache keys for different variations of this path
-    $cache_keys = [
-      $this->generate_router_cache_key( $path, true, false, null, null ),   // with content
-      $this->generate_router_cache_key( $path, false, false, null, null ),  // without content
-    ];
-    
-    foreach ( $cache_keys as $key ) {
-      delete_transient( $key );
-    }
-  }
-
-  /**
    * Check if post affects homepage
    */
   private function affects_homepage( $post ) {
@@ -270,35 +229,6 @@ class API_Router {
       is_sticky( $post->ID ) ||
       $post->post_type === 'nav_menu_item'
     );
-  }
-
-  /**
-   * Selectively invalidate posts query cache
-   */
-  private function invalidate_posts_query_cache( $post ) {
-    global $wpdb;
-    
-    // Only clear cache for queries that would include this post type
-    $post_type = $post->post_type;
-    
-    // Clear cache keys that might include this post type
-    $wpdb->query( $wpdb->prepare(
-      "DELETE FROM {$wpdb->options} 
-       WHERE option_name LIKE %s 
-       AND (option_name LIKE %s OR option_name LIKE %s)",
-      '_transient_posts_query_%',
-      '%' . $post_type . '%',
-      '%any%'
-    ));
-    
-    $wpdb->query( $wpdb->prepare(
-      "DELETE FROM {$wpdb->options} 
-       WHERE option_name LIKE %s 
-       AND (option_name LIKE %s OR option_name LIKE %s)",
-      '_transient_timeout_posts_query_%',
-      '%' . $post_type . '%',
-      '%any%'
-    ));
   }
 
   /**

@@ -206,13 +206,6 @@ class API_Settings {
       return;
     }
 
-    // Debounce.
-    $transient_key = 'menu_cache_debounce';
-    if ( get_transient( $transient_key ) ) {
-      return;
-    }
-    set_transient( $transient_key, true, 10 );
-
     $post = get_post( $post_id );
     if ( ! $post ) return;
     if ( $post->post_type !== "nav_menu_item" ) return;
