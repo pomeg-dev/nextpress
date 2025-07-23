@@ -119,6 +119,9 @@ class Init {
 		if ( isset( $query_params['page_id'] ) ) {
 			$page_id = $query_params['page_id'];
 			$req = '/api/draft?secret=<token>&id=' . $page_id;
+		} elseif ( isset( $query_params['p'] ) ) {
+			$page_id = $query_params['p'];
+			$req = '/api/draft?secret=<token>&id=' . $page_id;
 		}
 
 		if (
@@ -127,16 +130,6 @@ class Init {
 			strpos($req, 'index.php') !== false
 		) {
 			return;
-		}
-
-		if ( strpos( $req, 'p=' ) !== false && strpos( $req, 'preview=true' ) !== false ) {
-			parse_str( parse_url( $req, PHP_URL_QUERY ), $params );
-			if ( isset( $params['p'] ) ) {
-				$post_id = intval( $params['p'] );
-				$redirect_url = $this->helpers->frontend_url . '/api/draft?secret=<token>&id=' . $post_id;
-				wp_redirect( $redirect_url, 301 );
-				exit;
-			}
 		}
 
 		wp_redirect( $this->helpers->frontend_url . $req, 301 );
