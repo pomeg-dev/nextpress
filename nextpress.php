@@ -30,6 +30,7 @@ if ( ! class_exists( 'Firebase\JWT\Key' ) ) {
  * Gutenberg
  *----------------------------------------------------------------------------*/
 require_once plugin_dir_path(__FILE__) . 'gutenberg/register-blocks.php';
+require_once plugin_dir_path(__FILE__) . 'gutenberg/core-blocks.php';
 
 /*----------------------------------------------------------------------------*
  * Plugin WP-Admin Settings

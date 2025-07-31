@@ -26,46 +26,6 @@ add_action('acf/init', function () {
 });
 
 //styles
-
-$colors = new FieldsBuilder('colors');
-$colors
-    ->addTab("colors")
-    ->addColorPicker("primary_color", array(
-        'default_value' => '#F5BC51',
-    ))
-    ->addColorPicker("secondary_color", array(
-        'default_value' => '#1D1D1B',
-    ))
-    ->addColorPicker("tertiary_color", array(
-        'default_value' => '#F6F7F9',
-    ))
-    ->addColorPicker("quaternary_color", array(
-        'default_value' => '#D3D6D8',
-    ));
-
-$animation = new FieldsBuilder('animation');
-$animation
-    ->addTab("animation")
-    ->addTrueFalse("animations_enable")
-    ->addMessage('animation_instructions', 'possible options are .animation-fade, .animation-fade-up, .animation-fade-down, .animation-fade-left, .animation-fade-right, .animation-fade-up-right, .animation-fade-up-left, .animation-fade-down-right, .animation-fade-down-left, .animation-flip-up, .animation-flip-down, .animation-flip-left, .animation-flip-right, .animation-slide-up, .animation-slide-down, .animation-slide-left, .animation-slide-right, .animation-zoom-in, .animation-zoom-in-up, .animation-zoom-in-down, .animation-zoom-in-left, .animation-zoom-in-right, .animation-zoom-out, .animation-zoom-out-up, .animation-zoom-out-down, .animation-zoom-out-left, .animation-zoom-out-right', array(
-        'label' => 'Instructions',
-        'instructions' => '',
-        'required' => 0,
-        'conditional_logic' => array(
-            array(
-                array(
-                    'field' => 'animations_enable',
-                    'operator' => '==',
-                    'value' => '1',
-                ),
-            ),
-        ),
-        'message' => 'possible options are .animation-fade, .animation-fade-up, .animation-fade-down, .animation-fade-left, .animation-fade-right, .animation-fade-up-right, .animation-fade-up-left, .animation-fade-down-right, .animation-fade-down-left, .animation-flip-up, .animation-flip-down, .animation-flip-left, .animation-flip-right, .animation-slide-up, .animation-slide-down, .animation-slide-left, .animation-slide-right, .animation-zoom-in, .animation-zoom-in-up, .animation-zoom-in-down, .animation-zoom-in-left, .animation-zoom-in-right, .animation-zoom-out, .animation-zoom-out-up, .animation-zoom-out-down, .animation-zoom-out-left, .animation-zoom-out-right,',
-        'new_lines' => 'wpautop', // 'wpautop', 'br', '' no formatting
-        'esc_html' => 0,
-    ));
-
-
 $cookie_notice = new FieldsBuilder('cookie_notice');
 $cookie_notice
     ->addTab("cookie_notice")

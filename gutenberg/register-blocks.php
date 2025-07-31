@@ -526,7 +526,7 @@ function render_block_preview($post_id, $block, $inner_blocks) {
 
     $block_div = $xpath->query("//div[@id='" . $block_id . "']")->item(0);
     if ($block_div) {
-        $block_html = '<div data-theme="' . $block['category'] . '">' . $dom->saveHTML($block_div) . '</div>';
+        $block_html = '<div data-theme="' . $block['category'] . '"><div class="wp-preview">' . $dom->saveHTML($block_div) . '</div></div>';
 
         // Inner Blocks.
         if ($inner_blocks) {
@@ -679,6 +679,12 @@ function handle_dom_preload($post_id, $load_styles = false)
             .opacity-0 {
                 opacity: 1 !important;
             }
+            .wp-block-group.has-text-color .wp-preview {
+                color: inherit;
+            }
+            .wp-block-group.has-background .wp-preview {
+                background-color: inherit;
+            }
             <?php echo $combined_styles; ?>
         </style>
         <?php
@@ -719,11 +725,38 @@ function reload_frontend_page($post_id)
     handle_dom_preload($post_id);
 }
 
+function remove_wp_buttons()
+{
+    $screen = get_current_screen();
+    if ($screen->base === 'post' && isset($_GET['post'])) {
+        echo '<script>
+            document.addEventListener("DOMContentLoaded", function() {
+                let styleSheets = document.styleSheets;
+                for (let sheet of styleSheets) {
+                    try {
+                        let rules = sheet.cssRules || sheet.rules;
+                        for (let i = 0; i < rules.length; i++) {
+                            if (rules[i].selectorText && rules[i].selectorText.includes(".wp-core-ui .button")) {
+                                sheet.deleteRule(i); // Remove WP button styles
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Error modifying styles:", e);
+                    }
+                }
+            });
+        </script>';
+    }
+}
+
 // Initialize the block registration
 add_action('after_setup_theme', 'register_nextpress_blocks');
 
 // Setup DOMDocument and inject frontend styles.
 add_action('admin_head', 'preload_frontend_page');
+
+// Remove WP buttons from preview.
+add_action('admin_head', 'remove_wp_buttons');
 
 // Refetch DOMDocument on post save.
 add_action( 'save_post', 'reload_frontend_page');
@@ -775,3 +808,4 @@ function format_next_post_object($value, $post_id, $field) {
 add_filter('acf/format_value/name=current_post', 'format_next_post_object', 10, 3);
 add_filter('acf/format_value/name=login_page', 'format_next_post_object', 10, 3);
 add_filter('acf/format_value/name=register_page', 'format_next_post_object', 10, 3);
+add_filter('acf/format_value/name=rest_post', 'format_next_post_object', 10, 3);

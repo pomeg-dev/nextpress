@@ -33,6 +33,7 @@ class NextpressPostFormatter
         $formatted_post = self::include_author_name($formatted_post);
         $formatted_post = self::include_is_homepage($formatted_post);
         $formatted_post = self::include_category_names($formatted_post);
+        $formatted_post = self::include_tax_terms($formatted_post);
         $formatted_post = self::include_post_path($formatted_post);
         $formatted_post = self::include_breadcrumbs($formatted_post);
         $formatted_post = self::return_post_revision_for_preview($formatted_post);
@@ -274,6 +275,27 @@ class NextpressPostFormatter
     private static function include_category_names($formatted_post)
     {
         $formatted_post['category_names'] = wp_get_post_categories($formatted_post['id'], array('fields' => 'names'));
+        return $formatted_post;
+    }
+
+    private static function include_tax_terms($formatted_post)
+    {
+        $tax_args = [
+            'public'   => true,
+            '_builtin' => false
+        ];
+        $taxonomies = get_taxonomies($args);
+        $custom_taxonomies = array_filter($taxonomies, function($taxonomy) {
+            return !in_array($taxonomy, ['category', 'post_tag']);
+        });
+        foreach ($custom_taxonomies as $taxonomy) {
+            $terms = get_the_terms($formatted_post['id'], $taxonomy);
+            if ($terms && !is_wp_error($terms)) {
+                foreach ($terms as $term) {
+                    $formatted_post['terms'][$taxonomy][] = $term->name;
+                }
+            }
+        }
         return $formatted_post;
     }
 
