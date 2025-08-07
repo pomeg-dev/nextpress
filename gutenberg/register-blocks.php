@@ -802,6 +802,13 @@ function format_next_post_object($value, $post_id, $field) {
     if (is_object($value)) {
         $include_content = $field['name'] === 'current_post' ? false : true;
         $value = NextpressPostFormatter::format_post($value, $include_content);
+    } elseif ( is_array( $value ) ) {
+        $new_values = [];
+        foreach ( $value as $key => $post ) {
+            $new_values[] = NextpressPostFormatter::format_post($post, $include_content);
+        }
+
+        $value = $new_values;
     }
     return $value;
 }
