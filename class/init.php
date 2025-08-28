@@ -40,7 +40,8 @@ class Init {
 		new API_Theme( $this->helpers );
 
 		// Add user flows.
-		new User_Flow( $this->helpers );
+		// Removing for now as next-auth is too large for most projects.
+		// new User_Flow( $this->helpers );
 
 		// Add extensions
 		new Ext_ACF();
