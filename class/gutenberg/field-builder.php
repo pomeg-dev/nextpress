@@ -14,6 +14,10 @@ class Field_Builder {
    * ACF field builder function, maps API field types to ACF
    */
   public function build( $fields, $builder ) {
+    if ( ! is_array( $fields ) || empty( $fields ) ) {
+      return $builder;
+    }
+    
     foreach ( $fields as $field ) {
       $field_type = $field['type'];
       $field_args = [

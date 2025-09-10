@@ -192,8 +192,13 @@ class Register_Templates {
     $layouts = [];
 
     foreach ( $blocks as $block ) {
+      if ( ! is_array( $block ) || ! isset( $block['id'] ) ) {
+        continue;
+      }
+      
       $layout = new FieldsBuilder( $block['id'] );
-      $layout = $this->field_builder->build( $block['fields'], $layout );
+      $fields = isset( $block['fields'] ) ? $block['fields'] : [];
+      $layout = $this->field_builder->build( $fields, $layout );
       $layouts[ $block['id'] ] = apply_filters( 'nextpress_block_layouts', $layout );
     }
 
