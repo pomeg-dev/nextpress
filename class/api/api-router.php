@@ -71,8 +71,26 @@ class API_Router {
     } else if ( $page_for_posts_path == $path ) {
       $post = get_post( $page_for_posts_id );
     } else {
-      $post_id = url_to_postid( $path );
-      $post = get_post( $post_id );
+      // Handle Polylang language paths (e.g., /en, /fr)
+      if ( function_exists( 'pll_languages_list' ) ) {
+        $languages = pll_languages_list();
+        if ( in_array( $path, $languages ) ) {
+          // This is a language homepage, get the translated homepage
+          $homepage = $this->helpers->get_homepage();
+          if ( $homepage ) {
+            $translated_homepage_id = pll_get_post( $homepage->ID, $path );
+            $post = $translated_homepage_id ? get_post( $translated_homepage_id ) : $homepage;
+          } else {
+            $post = $homepage;
+          }
+        } else {
+          $post_id = url_to_postid( $path );
+          $post = get_post( $post_id );
+        }
+      } else {
+        $post_id = url_to_postid( $path );
+        $post = get_post( $post_id );
+      }
     }
 
     if ( ! $post ) {

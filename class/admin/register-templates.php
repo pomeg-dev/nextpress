@@ -95,6 +95,18 @@ class Register_Templates {
    */
   private function create_default_template_fields() {
     $template = new FieldsBuilder("default_templates");
+    $languages = [];
+
+    // Handle Polylang options.
+    if ( function_exists( 'pll_languages_list' ) ) {
+      $default_lang = pll_default_language();
+      $languages = pll_languages_list();
+      if ( in_array( $default_lang, $languages ) ) {
+        $languages = array_diff( $languages, [ $default_lang ] );
+      }
+      np_dumper( $default_lang );
+      np_dumper( $languages );
+    }
 
     $template
       ->addFlexibleContent("default_before_content", [
@@ -108,6 +120,23 @@ class Register_Templates {
         'layout' => 'block'
       ]);
 
+    if ( is_array( $languages ) && ! empty( $languages ) ) {
+      foreach ( $languages as $lang ) {
+        $lang_upper = strtoupper( $lang );
+        $template
+          ->addFlexibleContent("default_before_content_${lang}", [
+            'label' => "Before Content ${lang_upper}",
+            'button_label' => 'Add Block',
+            'layout' => 'block'
+          ])
+          ->addFlexibleContent("default_after_content_${lang}", [
+            'label' => "After Content ${lang_upper}",
+            'button_label' => 'Add Block',
+            'layout' => 'block'
+          ]);
+      }
+    }
+
     // Add layouts to flexible content fields
     $block_layouts = $this->create_block_layouts();
     foreach ( $block_layouts as $name => $layout ) {
@@ -117,6 +146,17 @@ class Register_Templates {
       $template
         ->getField("default_after_content")
         ->addLayout($layout);
+
+      if ( is_array( $languages ) && ! empty( $languages ) ) {
+        foreach ( $languages as $lang ) {
+          $template
+            ->getField("default_before_content_${lang}")
+            ->addLayout($layout);
+          $template
+            ->getField("default_after_content_${lang}")
+            ->addLayout($layout);
+        }
+      }
     }
 
     return $template;
