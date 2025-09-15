@@ -46,9 +46,19 @@ class Post_Formatter {
 
     // Polylang support.
     if ( function_exists( 'pll_get_post_language' ) ) {
+      // Set current post lang.
       $formatted_post['language'] = pll_get_post_language( $post->ID );
+
+      // Set all languages list.
+      $languages = pll_languages_list();
+      foreach ( $languages as $lang ) {
+        $formatted_post['languages'][ $lang ] = pll_home_url( $lang );
+      }
+
+      // Get post translations for lang switcher and hreflangs.
       $translations = pll_get_post_translations( $post->ID );
       foreach ( $translations as $lang => $post_id ) {
+        $formatted_post['languages'][ $lang ] = $this->get_full_path( $post_id );
         $formatted_post['translations'][ $lang ] = $this->get_full_path( $post_id );
       }
     }

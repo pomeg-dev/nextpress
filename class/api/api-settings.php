@@ -180,15 +180,25 @@ class API_Settings {
     // Add languages for Polylang support.
     if ( ! empty( $this->helpers->languages ) ) {
       foreach ( $this->helpers->languages as $lang => $details ) {
-        $main_key = "default_before_content_${lang}";
-        $np_key = "before_content_${lang}";
+        $default_before_key = "default_before_content_${lang}";
+        $np_before_key = "before_content_${lang}";
+        $default_after_key = "default_after_content_${lang}";
+        $np_after_key = "after_content_${lang}";
 
         if (
-          isset( $settings[ $main_key ] ) &&
-          is_array( $settings[ $main_key ] )
+          isset( $settings[ $default_before_key ] ) &&
+          is_array( $settings[ $default_before_key ] )
         ) {
-          $settings[ $np_key ] = $this->formatter->format_flexible_content( $settings[ $main_key ] );
-          unset( $settings[ $main_key ] );
+          $settings[ $np_before_key ] = $this->formatter->format_flexible_content( $settings[ $default_before_key ] );
+          unset( $settings[ $default_before_key ] );
+        }
+
+        if (
+          isset( $settings[ $default_after_key ] ) &&
+          is_array( $settings[ $default_after_key ] )
+        ) {
+          $settings[ $np_after_key ] = $this->formatter->format_flexible_content( $settings[ $default_after_key ] );
+          unset( $settings[ $default_after_key ] );
         }
       }
     }
