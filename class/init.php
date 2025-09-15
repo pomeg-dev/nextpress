@@ -47,7 +47,6 @@ class Init {
 		new Ext_ACF();
 		new Ext_Yoast();
 		new Ext_GravityForms();
-		// TODO: multilingual
 
 		// Register gutenberg block fields
 		new Register_Blocks( $this->helpers );

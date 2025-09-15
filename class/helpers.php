@@ -21,6 +21,12 @@ class Helpers {
   public $blocks_endpoint = '/api/blocks';
   public $blocks_url;
 
+  /**
+   * Polylang
+   */
+  public $languages = [];
+  public $default_language = '';
+
   public function __construct() {
     // Set API urls.
     $this->api_url = $this->docker_url . $this->api_endpoint;
@@ -35,6 +41,9 @@ class Helpers {
         $this->blocks_url = $this->frontend_url . $this->blocks_endpoint;
       }
     }
+
+    // Setup languages using Polylang.
+    add_action( 'init', [ $this, 'init_polylang' ] );
   }
 
   /**
@@ -129,6 +138,32 @@ class Helpers {
       return get_post( get_option( 'page_on_front' ) );
     } else {
       return get_page_by_path( 'home' );
+    }
+  }
+
+  /**
+   * Setup Polylang vars
+   */
+  public function init_polylang() {
+    if ( function_exists( 'pll_the_languages' ) ) {
+      $languages = pll_the_languages( [ 'raw' => 1 ] );
+      $default = pll_default_language();
+      if ( is_array( $languages ) && ! empty( $languages ) ) {
+        foreach ( $languages as $key => $lang ) {
+          unset( $languages[ $key ]['id'] );
+          unset( $languages[ $key ]['order'] );
+          unset( $languages[ $key ]['slug'] );
+          unset( $languages[ $key ]['flag'] );
+          unset( $languages[ $key ]['current_flag'] );
+          unset( $languages[ $key ]['no_translation'] );
+          unset( $languages[ $key ]['classes'] );
+          unset( $languages[ $key ]['link_classes'] );
+          unset( $languages[ $key ]['current_lang'] );
+          $languages[ $key ]['default_language'] = $key === $default;
+        }
+      }
+      $this->languages = $languages;
+      $this->default_language = $default;
     }
   }
 }

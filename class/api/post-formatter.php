@@ -44,6 +44,15 @@ class Post_Formatter {
     $formatted_post = $this->include_breadcrumbs( $formatted_post );
     $formatted_post = $this->return_post_revision_for_preview( $formatted_post );
 
+    // Polylang support.
+    if ( function_exists( 'pll_get_post_language' ) ) {
+      $formatted_post['language'] = pll_get_post_language( $post->ID );
+      $translations = pll_get_post_translations( $post->ID );
+      foreach ( $translations as $lang => $post_id ) {
+        $formatted_post['translations'][ $lang ] = $this->get_full_path( $post_id );
+      }
+    }
+
     if ( $include_metadata ) {
       $formatted_post = apply_filters( 'nextpress_post_object_w_meta', $formatted_post );
     }
@@ -115,6 +124,13 @@ class Post_Formatter {
 
     // Try to get post type specific templates
     $templates = get_field( "{$post_type}_content_templates", 'option' );
+
+    // Polylang support.
+    if ( function_exists( 'pll_get_post_language' ) ) {
+      $language = pll_get_post_language( $post->ID );
+      $lang_templates = get_field( "{$post_type}_content_templates_${language}", 'option' );
+      $templates = $language && ! empty( $lang_templates ) ? $lang_templates : $templates;
+    }
 
     if ( $templates ) {
       $default_template = null;

@@ -95,18 +95,6 @@ class Register_Templates {
    */
   private function create_default_template_fields() {
     $template = new FieldsBuilder("default_templates");
-    $languages = [];
-
-    // Handle Polylang options.
-    if ( function_exists( 'pll_languages_list' ) ) {
-      $default_lang = pll_default_language();
-      $languages = pll_languages_list();
-      if ( in_array( $default_lang, $languages ) ) {
-        $languages = array_diff( $languages, [ $default_lang ] );
-      }
-      np_dumper( $default_lang );
-      np_dumper( $languages );
-    }
 
     $template
       ->addFlexibleContent("default_before_content", [
@@ -120,17 +108,18 @@ class Register_Templates {
         'layout' => 'block'
       ]);
 
-    if ( is_array( $languages ) && ! empty( $languages ) ) {
-      foreach ( $languages as $lang ) {
-        $lang_upper = strtoupper( $lang );
+    if ( ! empty( $this->helpers->languages ) ) {
+      foreach ( $this->helpers->languages as $key => $lang ) {
+        if ( $lang['default_language'] ) continue;
+        $language = $lang['name'];
         $template
-          ->addFlexibleContent("default_before_content_${lang}", [
-            'label' => "Before Content ${lang_upper}",
+          ->addFlexibleContent("default_before_content_${key}", [
+            'label' => "Before Content ${language}",
             'button_label' => 'Add Block',
             'layout' => 'block'
           ])
-          ->addFlexibleContent("default_after_content_${lang}", [
-            'label' => "After Content ${lang_upper}",
+          ->addFlexibleContent("default_after_content_${key}", [
+            'label' => "After Content ${language}",
             'button_label' => 'Add Block',
             'layout' => 'block'
           ]);
@@ -141,20 +130,22 @@ class Register_Templates {
     $block_layouts = $this->create_block_layouts();
     foreach ( $block_layouts as $name => $layout ) {
       $template
-        ->getField("default_before_content")
-        ->addLayout($layout);
+        ->getField( "default_before_content" )
+        ->addLayout( $layout) ;
       $template
-        ->getField("default_after_content")
-        ->addLayout($layout);
+        ->getField( "default_after_content" )
+        ->addLayout( $layout );
 
-      if ( is_array( $languages ) && ! empty( $languages ) ) {
-        foreach ( $languages as $lang ) {
+      if ( ! empty( $this->helpers->languages ) ) {
+        foreach ( $this->helpers->languages as $key => $lang ) {
+          if ( $lang['default_language'] ) continue;
+          $language = $lang['name'];
           $template
-            ->getField("default_before_content_${lang}")
-            ->addLayout($layout);
+            ->getField( "default_before_content_${key}" )
+            ->addLayout( $layout );
           $template
-            ->getField("default_after_content_${lang}")
-            ->addLayout($layout);
+            ->getField( "default_after_content_${key}" )
+            ->addLayout( $layout );
         }
       }
     }
@@ -203,6 +194,39 @@ class Register_Templates {
       ])
       ->endRepeater();
 
+    if ( ! empty( $this->helpers->languages ) ) {
+      foreach ( $this->helpers->languages as $key => $lang ) {
+        if ( $lang['default_language'] ) continue;
+        $language = $lang['name'];
+        $template
+          ->addRepeater("{$post_type}_content_templates_${key}", [
+            'label' => "Content Templates ${language}",
+            'layout' => 'block'
+          ])
+          ->addSelect('category', [
+            'label' => 'Category (optional)',
+            'choices' => $category_choices,
+            'required' => 0,
+          ])
+          ->addFlexibleContent('before_content', [
+            'label' => 'Before Content',
+            'button_label' => 'Add Block',
+            'layout' => 'block'
+          ])
+          ->addFlexibleContent('after_content', [
+            'label' => 'After Content',
+            'button_label' => 'Add Block',
+            'layout' => 'block'
+          ])
+          ->addFlexibleContent('sidebar_content', [
+            'label' => 'Sidebar Content',
+            'button_label' => 'Add Block',
+            'layout' => 'block'
+          ])
+          ->endRepeater();
+      }
+    }
+
     // Add layouts to flexible content fields
     $block_layouts = $this->create_block_layouts();
     foreach ( $block_layouts as $name => $layout ) {
@@ -218,6 +242,24 @@ class Register_Templates {
         ->getField("{$post_type}_content_templates")
         ->getField('sidebar_content')
         ->addLayout($layout);
+
+      if ( ! empty( $this->helpers->languages ) ) {
+        foreach ( $this->helpers->languages as $key => $lang ) {
+          if ( $lang['default_language'] ) continue;
+          $template
+            ->getField("{$post_type}_content_templates_${key}")
+            ->getField('before_content')
+            ->addLayout($layout);
+          $template
+            ->getField("{$post_type}_content_templates_${key}")
+            ->getField('after_content')
+            ->addLayout($layout);
+          $template
+            ->getField("{$post_type}_content_templates_${key}")
+            ->getField('sidebar_content')
+            ->addLayout($layout);
+        }
+      }
     }
 
     return $template;

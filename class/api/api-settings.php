@@ -88,6 +88,12 @@ class API_Settings {
       $all_settings['page_for_posts_slug'] = $blog_page->post_name;
     }
 
+    // Add polylang.
+    if ( ! empty( $this->helpers->languages ) ) {
+      $all_settings['languages'] = $this->helpers->languages;
+      $all_settings['default_language'] = $this->helpers->default_language;
+    }
+
     // Filter specific keys if requested
     if ( isset( $data['keys'] ) && ! empty( $data['keys'] ) ) {
       $requested_keys = array_map( 'trim', explode( ',', $data['keys'] ) );
@@ -169,6 +175,22 @@ class API_Settings {
     ) {
       $settings['before_content'] = $this->formatter->format_flexible_content( $settings['default_before_content'] );
       unset( $settings['default_before_content'] );
+    }
+
+    // Add languages for Polylang support.
+    if ( ! empty( $this->helpers->languages ) ) {
+      foreach ( $this->helpers->languages as $lang => $details ) {
+        $main_key = "default_before_content_${lang}";
+        $np_key = "before_content_${lang}";
+
+        if (
+          isset( $settings[ $main_key ] ) &&
+          is_array( $settings[ $main_key ] )
+        ) {
+          $settings[ $np_key ] = $this->formatter->format_flexible_content( $settings[ $main_key ] );
+          unset( $settings[ $main_key ] );
+        }
+      }
     }
 
     return $settings;
