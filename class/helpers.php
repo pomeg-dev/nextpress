@@ -28,22 +28,51 @@ class Helpers {
   public $default_language = '';
 
   public function __construct() {
-    // Set API urls.
-    $this->api_url = $this->docker_url . $this->api_endpoint;
-    $this->blocks_url = $this->docker_url . $this->blocks_endpoint;
-
-    if ( function_exists( 'get_field' ) ) {
-      $frontend_url = get_field('frontend_url', 'option');
-      if ( $frontend_url ) {
-        $this->dev_mode = false;
-        $this->frontend_url = rtrim( $frontend_url, '/' );
-        $this->api_url = $this->frontend_url . $this->api_endpoint;
-        $this->blocks_url = $this->frontend_url . $this->blocks_endpoint;
-      }
-    }
-
     // Setup languages using Polylang.
     add_action( 'init', [ $this, 'init_polylang' ] );
+  }
+
+  /**
+   * Get the correct frontend URL with multiple fallback strategies
+   */
+  private function get_frontend_url() {
+    // Try ACF field first (most reliable when available)
+    if ( function_exists( 'get_field' ) ) {
+      $frontend_url = get_field( 'frontend_url', 'option' );
+      if ( $frontend_url ) {
+        return rtrim( $frontend_url, '/' );
+      }
+    }
+    
+    // Fallback to WordPress option (more reliable than ACF)
+    $frontend_url = get_option( 'options_frontend_url' );
+    if ( $frontend_url ) {
+      return rtrim( $frontend_url, '/' );
+    }
+    
+    // Local development.
+    return "http://localhost:3000";
+  }
+
+  /**
+   * Get API URL
+   */
+  private function get_api_url() {
+    return $this->get_frontend_url() . $this->api_endpoint;
+  }
+
+  /**
+   * Get blocks URL
+   */
+  private function get_blocks_url() {
+    return $this->get_frontend_url() . $this->blocks_endpoint;
+  }
+
+  /**
+   * Public getter for frontend URL (for backwards compatibility)
+   */
+  public function get_frontend_url_public() {
+    return $this->get_frontend_url();
   }
 
   /**
@@ -74,7 +103,7 @@ class Helpers {
       $data = maybe_unserialize( $blocks_cache );
       return $data;
     } else {
-      $blocks_url = $this->blocks_url;
+      $blocks_url = $this->get_blocks_url();
       if ( $theme ) {
         if ( is_array( $theme ) ) {
           $theme = implode( ',', $theme );
@@ -86,7 +115,8 @@ class Helpers {
         $blocks_url,
         [
           'timeout' => 20,
-          'sslverify' => ! $this->dev_mode
+          'sslverify' => ! $this->dev_mode,
+          'redirection' => 2
         ]
       );
   
@@ -118,7 +148,7 @@ class Helpers {
    * Revalidate Next.js route.
    */
   public function revalidate_fetch_route( $tag ) {
-    $request_url = $this->api_url . "/revalidate?tag=" . $tag;
+    $request_url = $this->get_api_url() . "/revalidate?tag=" . $tag;
     return wp_remote_get( $request_url );
   }
 
@@ -126,7 +156,7 @@ class Helpers {
    * Revalidate specific Next.js path.
    */
   public function revalidate_specific_path( $path ) {
-    $request_url = $this->api_url . "/revalidate?path=" . urlencode( $path );
+    $request_url = $this->get_api_url() . "/revalidate?path=" . urlencode( $path );
     return wp_remote_get( $request_url );
   }
 

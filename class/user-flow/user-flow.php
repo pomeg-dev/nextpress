@@ -110,7 +110,7 @@ class User_Flow {
    */
   public function init() {
     add_filter('rest_pre_serve_request', function( $response ) {
-      header( 'Access-Control-Allow-Origin: ' . $this->helpers->frontend_url );
+      header( 'Access-Control-Allow-Origin: ' . $this->helpers->get_frontend_url_public() );
       header( 'Access-Control-Allow-Credentials: true' );
       header( 'Access-Control-Allow-Methods: GET, POST, OPTIONS' );
       header( 'Access-Control-Allow-Headers: Content-Type, Authorization' );

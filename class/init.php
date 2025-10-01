@@ -101,7 +101,7 @@ class Init {
     if ( $redirects_json ) {
 			foreach ( $redirects_json as $redirect ) {
 				if ( $permalink === $redirect['origin'] ) {
-					wp_redirect( $this->helpers->frontend_url . '/' . ltrim( $redirect['url'] ), 301 );
+					wp_redirect( $this->helpers->get_frontend_url_public() . '/' . ltrim( $redirect['url'] ), 301 );
 					exit;
 				}
 			}
@@ -132,7 +132,7 @@ class Init {
 			return;
 		}
 
-		wp_redirect( $this->helpers->frontend_url . $req, 301 );
+		wp_redirect( $this->helpers->get_frontend_url_public() . $req, 301 );
 		exit;
 	}
 
@@ -140,7 +140,7 @@ class Init {
 	 * Fix preview post links
 	 */
 	public function nextpress_edit_post_preview_link( $link, $post ) {
-		$draft_link =  $this->helpers->frontend_url . '/api/draft?secret=<token>&id=' . $post->ID;
+		$draft_link =  $this->helpers->get_frontend_url_public() . '/api/draft?secret=<token>&id=' . $post->ID;
     return $draft_link;
 	}
 

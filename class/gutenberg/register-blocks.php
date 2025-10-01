@@ -142,7 +142,7 @@ class Register_Blocks {
     $block_html = preg_replace( $pattern, $replacement, $block_html );
 
     $encoded_content = urlencode( $this->compress_data( $block_html ) );
-    $frontend_url = $this->helpers->frontend_url;
+    $frontend_url = $this->helpers->get_frontend_url_public();
     $iframe_id = 'block_preview_' . $block['id'];
     
     // Create a hash of the content for change detection
