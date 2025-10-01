@@ -33,9 +33,26 @@ class Helpers {
   }
 
   /**
+   * Get working Docker URL for local development
+   */
+  private function get_docker_url( $return_local = false ) {
+    if ( $return_local ) return 'http://localhost:3000';
+ 
+    // Test if host.docker.internal actually works
+    $test_url = 'http://host.docker.internal:3000';
+    $response = wp_remote_get( $test_url, [ 'timeout' => 2 ] );
+    
+    if ( ! is_wp_error( $response ) ) {
+      return 'http://host.docker.internal:3000';
+    }
+    
+    return 'http://localhost:3000'; // Final fallback
+  }
+
+  /**
    * Get the correct frontend URL with multiple fallback strategies
    */
-  private function get_frontend_url() {
+  private function get_frontend_url( $return_local = false ) {
     // Try ACF field first (most reliable when available)
     if ( function_exists( 'get_field' ) ) {
       $frontend_url = get_field( 'frontend_url', 'option' );
@@ -50,8 +67,8 @@ class Helpers {
       return rtrim( $frontend_url, '/' );
     }
     
-    // Local development.
-    return "http://localhost:3000";
+    // Local development: try Docker URLs
+    return $this->get_docker_url( $return_local );
   }
 
   /**
@@ -72,7 +89,7 @@ class Helpers {
    * Public getter for frontend URL (for backwards compatibility)
    */
   public function get_frontend_url_public() {
-    return $this->get_frontend_url();
+    return $this->get_frontend_url( true );
   }
 
   /**
@@ -104,6 +121,15 @@ class Helpers {
       return $data;
     } else {
       $blocks_url = $this->get_blocks_url();
+
+      // Failsafe if not localhost.
+      if (
+        strpos( $blocks_url, 'host.docker' ) !== false &&
+        strpos( site_url(), 'localhost' ) === false
+      ) {
+        return;
+      }
+
       if ( $theme ) {
         if ( is_array( $theme ) ) {
           $theme = implode( ',', $theme );
