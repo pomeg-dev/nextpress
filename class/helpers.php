@@ -124,8 +124,10 @@ class Helpers {
 
       // Failsafe if not localhost.
       if (
-        strpos( $blocks_url, 'host.docker' ) !== false &&
-        strpos( site_url(), 'localhost' ) === false
+        ( 
+          strpos( $blocks_url, 'host.docker' ) !== false || 
+          strpos( $blocks_url, 'localhost' ) !== false
+        ) && strpos( site_url(), 'localhost' ) === false
       ) {
         return;
       }
@@ -136,6 +138,24 @@ class Helpers {
         }
         $blocks_url .= '?theme=' . $theme;
       }
+
+      // Rate limiting: Track request count and implement circuit breaker
+      $url_hash = md5( $blocks_url );
+      $rate_limit_key = 'blocks_api_requests';
+      $circuit_breaker_key = 'blocks_api_circuit_breaker_' . $url_hash;
+      $current_requests = get_transient( $rate_limit_key ) ?: 0;
+      
+      // Check if circuit breaker is active (after too many failures)
+      if ( get_transient( $circuit_breaker_key ) ) {
+        error_log( 'API requests blocked by circuit breaker' );
+        return;
+      }
+      
+      // Rate limit: max 3 requests per 30 seconds to prevent bursts
+      if ( $current_requests >= 3 ) {
+        error_log( 'API request rate limit exceeded' );
+        return;
+      }
   
       $response = wp_remote_get(
         $blocks_url,
@@ -145,17 +165,53 @@ class Helpers {
           'redirection' => 2
         ]
       );
+
+      // Increment request counter
+      set_transient( $rate_limit_key, $current_requests + 1, 30 );
   
       if ( is_wp_error( $response ) ) {
         error_log( 'API request failed: ' . $response->get_error_message() );
+        
+        // Circuit breaker: Track consecutive failures
+        $failure_count_key = 'blocks_api_failures_' . $url_hash;
+        $failure_count = get_transient( $failure_count_key ) ?: 0;
+        $failure_count++;
+        
+        // After 3 consecutive failures, activate circuit breaker for 5 minutes
+        if ( $failure_count >= 3 ) {
+          set_transient( $circuit_breaker_key, true, 300 ); // 5 minutes
+          delete_transient( $failure_count_key );
+          error_log( 'Circuit breaker activated due to repeated API failures' );
+        } else {
+          set_transient( $failure_count_key, $failure_count, 300 );
+        }
+        
         return false;
       }
   
       $response_code = wp_remote_retrieve_response_code( $response );
       if ( $response_code !== 200 ) {
         error_log( 'API request failed with response code: ' . $response_code );
+        
+        // Circuit breaker: Track consecutive failures
+        $failure_count_key = 'blocks_api_failures_' . $url_hash;
+        $failure_count = get_transient( $failure_count_key ) ?: 0;
+        $failure_count++;
+        
+        // After 3 consecutive failures, activate circuit breaker for 5 minutes
+        if ( $failure_count >= 3 ) {
+          set_transient( $circuit_breaker_key, true, 300 ); // 5 minutes
+          delete_transient( $failure_count_key );
+          error_log( 'Circuit breaker activated due to repeated API failures' );
+        } else {
+          set_transient( $failure_count_key, $failure_count, 300 );
+        }
+        
         return false;
       }
+      
+      // Reset failure count on successful request
+      delete_transient( 'blocks_api_failures_' . $url_hash );
   
       $body = wp_remote_retrieve_body( $response );
       $data = json_decode( $body, true );
