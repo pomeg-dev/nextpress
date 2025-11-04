@@ -138,7 +138,7 @@ class Post_Formatter {
     // Polylang support.
     if ( function_exists( 'pll_get_post_language' ) ) {
       $language = pll_get_post_language( $post->ID );
-      $lang_templates = get_field( "{$post_type}_content_templates_${language}", 'option' );
+      $lang_templates = get_field( "{$post_type}_content_templates_{$language}", 'option' );
       $templates = $language && ! empty( $lang_templates ) ? $lang_templates : $templates;
     }
 

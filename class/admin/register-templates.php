@@ -113,12 +113,12 @@ class Register_Templates {
         if ( $lang['default_language'] ) continue;
         $language = $lang['name'];
         $template
-          ->addFlexibleContent("default_before_content_${key}", [
+          ->addFlexibleContent("default_before_content_{$key}", [
             'label' => "Before Content ${language}",
             'button_label' => 'Add Block',
             'layout' => 'block'
           ])
-          ->addFlexibleContent("default_after_content_${key}", [
+          ->addFlexibleContent("default_after_content_{$key}", [
             'label' => "After Content ${language}",
             'button_label' => 'Add Block',
             'layout' => 'block'
@@ -141,10 +141,10 @@ class Register_Templates {
           if ( $lang['default_language'] ) continue;
           $language = $lang['name'];
           $template
-            ->getField( "default_before_content_${key}" )
+            ->getField( "default_before_content_{$key}" )
             ->addLayout( $layout );
           $template
-            ->getField( "default_after_content_${key}" )
+            ->getField( "default_after_content_{$key}" )
             ->addLayout( $layout );
         }
       }
@@ -199,7 +199,7 @@ class Register_Templates {
         if ( $lang['default_language'] ) continue;
         $language = $lang['name'];
         $template
-          ->addRepeater("{$post_type}_content_templates_${key}", [
+          ->addRepeater("{$post_type}_content_templates_{$key}", [
             'label' => "Content Templates ${language}",
             'layout' => 'block'
           ])
@@ -247,15 +247,15 @@ class Register_Templates {
         foreach ( $this->helpers->languages as $key => $lang ) {
           if ( $lang['default_language'] ) continue;
           $template
-            ->getField("{$post_type}_content_templates_${key}")
+            ->getField("{$post_type}_content_templates_{$key}")
             ->getField('before_content')
             ->addLayout($layout);
           $template
-            ->getField("{$post_type}_content_templates_${key}")
+            ->getField("{$post_type}_content_templates_{$key}")
             ->getField('after_content')
             ->addLayout($layout);
           $template
-            ->getField("{$post_type}_content_templates_${key}")
+            ->getField("{$post_type}_content_templates_{$key}")
             ->getField('sidebar_content')
             ->addLayout($layout);
         }

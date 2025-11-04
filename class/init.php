@@ -49,7 +49,8 @@ class Init {
 		new Ext_GravityForms();
 
 		// Register gutenberg block fields
-		new Register_Blocks( $this->helpers );
+		// new Register_Blocks( $this->helpers );
+		new Register_Blocks_ACF_V3( $this->helpers );
 
 		// Add redirects
 		add_action( 'template_redirect', [ $this, 'nextpress_redirect_frontend' ] );

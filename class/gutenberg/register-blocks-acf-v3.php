@@ -13,7 +13,7 @@ use StoutLogic\AcfBuilder\FieldsBuilder;
 use StoutLogic\AcfBuilder\FieldBuilder;
 use StoutLogic\AcfBuilder\RepeaterBuilder;
 
-class Register_Blocks {
+class Register_Blocks_ACF_V3 {
   /**
    * Helpers.
    */
@@ -105,7 +105,7 @@ class Register_Blocks {
           'icon'              => $this->get_icon( $block_name ),
           'keywords'          => [ $block_name, 'custom' ],
           'supports'          => [
-            'jsx' => true, 
+            'jsx' => true,
             'anchor' => true
           ],
           'api_version'       => 3,
@@ -116,26 +116,22 @@ class Register_Blocks {
   }
 
   /**
-   * Render block callback with debouncing and intelligent polling
-   * Requests nextjs /block-preview route in an iframe with optimized loading
+   * Render block callback optimized for ACF Blocks V3
+   * Requests nextjs /block-preview route in an iframe with minimal re-rendering
    */
   public function render_nextpress_block( $block, $content = '', $is_preview = false, $post_id = 0 ) {
     $block_name = str_replace('acf/', '', $block['name']);
     $inner_blocks = get_field('inner_blocks');
-
     $block_html = $this->convert_acf_block_to_string( $block );
     $block_html = $this->formatter->parse_block_data( $block_html );
+    $block_html = $this->set_inner_blocks( $block, $post_id, $block_html );
 
-    // Attempt to parse inner blocks and patterns.
-    $block_id = isset( $block_html[0]['id'] ) ? $block_html[0]['id'] : false;
-    $block_html = $this->set_inner_blocks( $block_id, $post_id, $block_html );
-
-    $block_prefix = isset( $block_html[0]['slug'] ) 
+    $block_prefix = isset( $block_html[0]['slug'] )
         ? 'field_' . str_replace( 'acf-', '', $block_html[0]['slug'] ) . '-block_'
         : '';
     $block_html = json_encode( $block_html, JSON_UNESCAPED_SLASHES );
     if ( $block_prefix ) {
-        $block_html = str_replace( $block_prefix, '', $block_html );
+      $block_html = str_replace( $block_prefix, '', $block_html );
     }
 
     // Remove modal_content items
@@ -146,175 +142,229 @@ class Register_Blocks {
     $encoded_content = urlencode( $this->compress_data( $block_html ) );
     $frontend_url = $this->helpers->get_frontend_url_public();
     $iframe_id = 'block_preview_' . $block['id'];
-    
+
     // Create a hash of the content for change detection
-    $content_hash = md5($block_html);
+    $content_hash = md5( $block_html );
+
+    // np_dumper( '$block_html' );
+    // np_dumper( $block_html );
+    // np_dumper( $encoded_content );
 
     // Initial iframe with loading state
-    echo "<div id='block_wrapper_{$iframe_id}' class='nextpress-block-wrapper'>";
+    echo "<div id='block_wrapper_{$iframe_id}' class='nextpress-block-wrapper' data-block-id='{$block['id']}'>";
     echo "<div id='loading_{$iframe_id}' class='nextpress-loading' style='display: flex; align-items: center; justify-content: center; height: 100px; background: #f0f0f1; border: 1px dashed #ccc;'>";
     echo "<span>Loading preview...</span>";
     echo "</div>";
-    echo "<iframe id='{$iframe_id}' style='display: none; pointer-events: none; min-height: 80px; width: 100%; border: none;' data-content-hash='{$content_hash}' data-frontend-url='{$frontend_url}' data-post-id='{$post_id}' data-encoded-content='{$encoded_content}'></iframe>";
+    // echo "<div>{$block_html}</div>";
+    echo "<iframe id='{$iframe_id}' style='display: none; pointer-events: none; min-height: 80px; width: 100%; border: none;' data-content-hash='{$content_hash}' data-frontend-url='{$frontend_url}' data-post-id='{$post_id}' data-encoded-content='{$encoded_content}' data-initialized='false'></iframe>";
     echo "</div>";
 
-    // Add the optimized loading and resize script
+    // Enqueue global script only once
+    static $global_script_added = false;
+    if ( ! $global_script_added ) {
+      $global_script_added = true;
+      ?>
+      <script>
+      // Global NextPress block manager for ACF Blocks V3
+      window.NextPressBlockManager = window.NextPressBlockManager || (function() {
+          var instances = {};
+          var debounceTimers = {};
+          var globalDebounceTimer = null;
+          var isGlobalListenerSetup = false;
+
+          function setupGlobalListeners() {
+              if (isGlobalListenerSetup) return;
+              isGlobalListenerSetup = true;
+
+              // Global message listener for height adjustments
+              window.addEventListener('message', function(event) {
+                  if (event.data && event.data.type === 'blockPreviewHeight' && event.data.iframeId) {
+                      var iframe = document.getElementById(event.data.iframeId);
+                      if (iframe) {
+                          var newHeight = (event.data.height + 20) + 'px';
+                          if (typeof event.data.height === 'string' && event.data.height.includes('vh')) {
+                              newHeight = event.data.height;
+                          }
+                          iframe.style.height = newHeight;
+                      }
+                  }
+              });
+
+              // ACF V3 specific: Block re-renders happen automatically on change
+              // We don't need manual field listeners because ACF V3 triggers PHP re-render
+              // Our register() function will detect the new DOM and reload automatically
+              if (window.acf) {
+                  acf.addAction('ready', function() {
+                      // Only listen to structural changes that need immediate updates
+                      acf.addAction('append', function() {
+                          reloadAllVisible(800);
+                      });
+                      acf.addAction('remove', function() {
+                          reloadAllVisible(800);
+                      });
+                      acf.addAction('sortstop', function() {
+                          reloadAllVisible(800);
+                      });
+                  });
+              }
+          }
+
+          function reloadAllVisible(delay) {
+              clearTimeout(globalDebounceTimer);
+              globalDebounceTimer = setTimeout(function() {
+                  Object.keys(instances).forEach(function(id) {
+                      if (instances[id].isVisible()) {
+                          instances[id].reload();
+                      }
+                  });
+              }, delay || 800);
+          }
+
+          function BlockInstance(iframeId) {
+              this.iframeId = iframeId;
+              this.iframe = null;
+              this.loading = null;
+              this.wrapper = null;
+              this.lastLoadedHash = '';
+              this.isLoading = false;
+              this.initialized = false;
+
+              this.init = function() {
+                  this.iframe = document.getElementById(this.iframeId);
+                  this.loading = document.getElementById('loading_' + this.iframeId);
+                  this.wrapper = document.getElementById('block_wrapper_' + this.iframeId);
+
+                  if (!this.iframe) return;
+
+                  setupGlobalListeners();
+
+                  // Check if content hash has changed (ACF V3 triggers re-render on field changes)
+                  var currentHash = this.iframe.getAttribute('data-content-hash');
+                  var isInitialized = this.iframe.getAttribute('data-initialized') === 'true';
+
+                  // Only skip if hash is same AND already initialized
+                  if (isInitialized && currentHash === this.lastLoadedHash) {
+                      // Content hasn't changed, skip reload
+                      return;
+                  }
+
+                  // Content changed or first load - reload iframe
+                  var self = this;
+                  setTimeout(function() {
+                      self.loadIframe();
+                  }, 150);
+              };
+
+              this.isVisible = function() {
+                  if (!this.wrapper) return false;
+                  var rect = this.wrapper.getBoundingClientRect();
+                  return rect.top < window.innerHeight && rect.bottom > 0;
+              };
+
+              this.loadIframe = function() {
+                  if (!this.iframe || this.isLoading) return;
+
+                  var currentHash = this.iframe.getAttribute('data-content-hash');
+
+                  // Skip if content hasn't changed and iframe is already loaded
+                  if (currentHash === this.lastLoadedHash && this.iframe.src) {
+                      if (this.iframe.style.display === 'none') {
+                          this.iframe.style.display = 'block';
+                          if (this.loading) this.loading.style.display = 'none';
+                      }
+                      return;
+                  }
+
+                  this.isLoading = true;
+                  this.lastLoadedHash = currentHash;
+
+                  var frontendUrl = this.iframe.getAttribute('data-frontend-url');
+                  var postId = this.iframe.getAttribute('data-post-id');
+                  var encodedContent = this.iframe.getAttribute('data-encoded-content');
+
+                  if (this.loading) {
+                      this.loading.style.display = 'flex';
+                      this.loading.innerHTML = '<span>Updating preview...</span>';
+                  }
+                  this.iframe.style.display = 'none';
+
+                  var self = this;
+                  var newSrc = frontendUrl + '/block-preview?post_id=' + postId + '&content=' + encodedContent + '&iframe_id=' + this.iframeId + '&t=' + Date.now();
+
+                  this.iframe.onload = function() {
+                      self.isLoading = false;
+                      self.iframe.style.display = 'block';
+                      self.iframe.setAttribute('data-initialized', 'true');
+                      if (self.loading) self.loading.style.display = 'none';
+                  };
+
+                  this.iframe.onerror = function() {
+                      self.isLoading = false;
+                      if (self.loading) {
+                          self.loading.innerHTML = '<span style="color: #d63638;">Preview unavailable</span>';
+                      }
+                  };
+
+                  this.iframe.src = newSrc;
+
+                  // Timeout fallback
+                  setTimeout(function() {
+                      if (self.isLoading) {
+                          self.isLoading = false;
+                          self.iframe.style.display = 'block';
+                          if (self.loading) self.loading.style.display = 'none';
+                      }
+                  }, 5000);
+              };
+
+              this.reload = function() {
+                  var self = this;
+                  clearTimeout(debounceTimers[this.iframeId]);
+                  debounceTimers[this.iframeId] = setTimeout(function() {
+                      // Force reload by updating hash
+                      self.lastLoadedHash = '';
+                      self.loadIframe();
+                  }, 300);
+              };
+          }
+
+          return {
+              register: function(iframeId) {
+                  // ACF V3 re-renders blocks, so we need to re-initialize even if instance exists
+                  if (instances[iframeId]) {
+                      // Re-initialize existing instance with new DOM elements
+                      setTimeout(function() {
+                          instances[iframeId].init();
+                      }, 100);
+                  } else {
+                      // Create new instance
+                      instances[iframeId] = new BlockInstance(iframeId);
+                      setTimeout(function() {
+                          instances[iframeId].init();
+                      }, 100);
+                  }
+                  return instances[iframeId];
+              },
+              getInstance: function(iframeId) {
+                  return instances[iframeId];
+              }
+          };
+      })();
+      </script>
+      <?php
+    }
+
+    // Register this specific block instance
     ?>
     <script>
     (function() {
         var iframeId = '<?php echo $iframe_id; ?>';
-        var contentHash = '<?php echo $content_hash; ?>';
-        var debounceTimer;
-        var lastLoadedHash = '';
-        var isLoading = false;
-        
-        function loadIframe() {
-            var iframe = document.getElementById(iframeId);
-            var loading = document.getElementById('loading_' + iframeId);
-            
-            if (!iframe || isLoading) return;
-            
-            // Check if content has actually changed
-            var currentHash = iframe.getAttribute('data-content-hash');
-            if (currentHash === lastLoadedHash) {
-                // Content hasn't changed, just show the iframe if it's hidden
-                if (iframe.style.display === 'none' && iframe.src) {
-                    iframe.style.display = 'block';
-                    if (loading) loading.style.display = 'none';
-                }
-                return;
-            }
-            
-            isLoading = true;
-            lastLoadedHash = currentHash;
-            
-            var frontendUrl = iframe.getAttribute('data-frontend-url');
-            var postId = iframe.getAttribute('data-post-id');
-            var encodedContent = iframe.getAttribute('data-encoded-content');
-            
-            // Show loading state
-            if (loading) {
-                loading.style.display = 'flex';
-                loading.innerHTML = '<span>Updating preview...</span>';
-            }
-            iframe.style.display = 'none';
-            
-            // Set up the iframe source
-            iframe.src = frontendUrl + '/block-preview?post_id=' + postId + '&content=' + encodedContent + '&iframe_id=' + iframeId + '&t=' + Date.now();
-            
-            // Handle iframe load
-            iframe.onload = function() {
-                isLoading = false;
-                iframe.style.display = 'block';
-                if (loading) loading.style.display = 'none';
-            };
-            
-            // Handle iframe error
-            iframe.onerror = function() {
-                isLoading = false;
-                if (loading) {
-                    loading.innerHTML = '<span style="color: #d63638;">Preview unavailable</span>';
-                }
-            };
-            
-            // Timeout fallback
-            setTimeout(function() {
-                if (isLoading) {
-                    isLoading = false;
-                    iframe.style.display = 'block';
-                    if (loading) loading.style.display = 'none';
-                }
-            }, 5000);
-        }
-        
-        function debouncedLoad() {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(loadIframe, 800); // 800ms debounce
-        }
-        
-        function setupMessageListener() {
-            var iframe = document.getElementById(iframeId);
-            if (!iframe) {
-                setTimeout(setupMessageListener, 100);
-                return;
-            }
-            
-            function handleMessage(event) {
-                if (
-                    event.data && 
-                    event.data.type === 'blockPreviewHeight' &&
-                    event.data.iframeId === iframeId
-                ) {
-                    var iframe = document.getElementById(iframeId);
-                    if (iframe) {
-                        var newHeight = (event.data.height + 20) + 'px';
-                        if (typeof event.data.height === 'string' && event.data.height.includes('vh')) {
-                            newHeight = event.data.height;
-                        }
-                        iframe.style.height = newHeight;
-                    }
-                }
-            }
-            
-            window.removeEventListener('message', handleMessage);
-            window.addEventListener('message', handleMessage);
-        }
-        
-        // Initialize
-        setupMessageListener();
-        
-        // Load immediately for first render
-        setTimeout(debouncedLoad, 100);
-        
-        // Set up ACF field change listeners
-        if (window.acf) {
-            acf.addAction('ready', function() {
-                // Listen for ACF field changes
-                acf.addAction('load', debouncedLoad);
-                acf.addAction('append', debouncedLoad);
-                acf.addAction('remove', debouncedLoad);
-                acf.addAction('sortstop', debouncedLoad);
-                
-                // Listen for specific field types that commonly trigger updates
-                jQuery(document).on('change input', '.acf-field input, .acf-field textarea, .acf-field select', function() {
-                    // Update the content hash when fields change
-                    var iframe = document.getElementById(iframeId);
-                    if (iframe) {
-                        // Generate new hash based on current form data
-                        var formData = new FormData(jQuery(this).closest('form')[0] || document.body);
-                        var newHash = Array.from(formData.entries()).join('');
-                        iframe.setAttribute('data-content-hash', btoa(newHash).substring(0, 16));
-                    }
-                    debouncedLoad();
-                });
-            });
-        }
-        
-        // WordPress block editor integration
-        if (window.wp && window.wp.data) {
-            var lastBlockCount = 0;
-            wp.data.subscribe(function() {
-                var blocks = wp.data.select('core/block-editor').getBlocks();
-                var currentBlockCount = blocks.length;
-                
-                // Only trigger if block count changed (avoid constant updates)
-                if (currentBlockCount !== lastBlockCount) {
-                    lastBlockCount = currentBlockCount;
-                    debouncedLoad();
-                }
-            });
-        }
-        
-        // Handle document ready state
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                setupMessageListener();
-                debouncedLoad();
-            });
+        if (window.NextPressBlockManager) {
+            window.NextPressBlockManager.register(iframeId);
         }
     })();
     </script>
-    
+
     <style>
     .nextpress-block-wrapper {
         position: relative;
@@ -322,13 +372,13 @@ class Register_Blocks {
         background-color: #f0f0f1;
         margin: 0 0 10px;
     }
-    
+
     .nextpress-loading {
         font-size: 14px;
         color: #666;
         animation: pulse 1.5s ease-in-out infinite alternate;
     }
-    
+
     @keyframes pulse {
         from { opacity: 0.6; }
         to { opacity: 1; }
@@ -370,76 +420,108 @@ class Register_Blocks {
   /**
    * Parse post content and try to set inner blocks into block_html, including Patterns
    */
-  private function set_inner_blocks( $block_id, $post_id, $block_html ) {
+  private function set_inner_blocks( $block, $post_id, $block_html ) {
     $post_content = get_post_field( 'post_content', $post_id );
+    if ( ! $post_content ) {
+      return $block_html;
+    }
+
     $all_blocks = parse_blocks( $post_content );
-    foreach ( $all_blocks as $block_content ) {
-      if ( $block_id === $block_content['attrs']['anchor'] ) {
-        $inner_blocks = $block_content['innerBlocks'];
-        foreach ( $inner_blocks as $key => $nested_block ) {
-          if ( $nested_block['blockName'] === 'core/block' ) {
-            $pattern_id = $nested_block['attrs']['ref'];
+    $all_blocks = array_filter($all_blocks, function( $content_block ) use ( $block ) {
+      return isset( $content_block['blockName'] )
+        && is_string( $content_block['blockName'] )
+        && $content_block['blockName'] !== ''
+        && isset( $block['name'] )
+        && $content_block['blockName'] === $block['name']
+        && isset( $content_block['attrs']['anchor'] )
+        && isset( $block['anchor'] )
+        && $content_block['attrs']['anchor'] === $block['anchor']
+        && isset( $content_block['attrs']['nextpress_id'] )
+        && isset( $block['nextpress_id'] )
+        && $content_block['attrs']['nextpress_id'] === $block['nextpress_id'];
+    });
+
+    if ( !empty( $all_blocks ) ) {
+      $all_blocks = array_values( $all_blocks );
+      $block_content = $all_blocks[0];
+
+      $inner_blocks = isset( $block_content['innerBlocks'] ) ? $block_content['innerBlocks'] : [];
+      if ( empty( $inner_blocks ) ) {
+        return $block_html;
+      }
+
+      foreach ( $inner_blocks as $key => $nested_block ) {
+        // Handle reusable blocks (patterns)
+        if ( isset( $nested_block['blockName'] ) && $nested_block['blockName'] === 'core/block' ) {
+          $pattern_id = isset( $nested_block['attrs']['ref'] ) ? $nested_block['attrs']['ref'] : null;
+
+          if ( $pattern_id ) {
             $pattern_post = get_post( $pattern_id );
-            
+
             if ( $pattern_post && $pattern_post->post_type === 'wp_block' ) {
               $pattern_blocks = parse_blocks( $pattern_post->post_content );
               foreach ( $pattern_blocks as &$inner_pattern_block ) {
                 if ( isset( $inner_pattern_block['attrs']['data'] ) ) {
                   $inner_pattern_block['data'] = $inner_pattern_block['attrs']['data'];
                 } else {
-                  $inner_pattern_block['data'] = $inner_pattern_block['attrs'];
+                  $inner_pattern_block['data'] = isset( $inner_pattern_block['attrs'] ) ? $inner_pattern_block['attrs'] : [];
                 }
               }
               $inner_blocks[ $key ]['innerBlocks'] = $pattern_blocks;
             }
-          } else {
-            $nested_block['data'] = $this->parse_acf_repeater_fields( $nested_block, $post_id );
-            $inner_blocks[ $key ] = $nested_block;
           }
+        } else {
+          // Parse ACF repeater fields for regular blocks
+          $nested_block['data'] = $this->parse_acf_repeater_fields( $nested_block, $post_id );
+          $inner_blocks[ $key ] = $nested_block;
+          unset( $inner_blocks[ $key ]['attrs'] );
         }
-
-
-        $block_html[0]['innerBlocks'] = $inner_blocks;
-        break;
       }
+
+      $block_html[0]['innerBlocks'] = $inner_blocks;
     }
 
     return $block_html;
   }
 
   private function parse_acf_repeater_fields( $block, $post_id ) {
+    // Check if attrs and data exist
+    if ( ! isset( $block['attrs']['data'] ) ) {
+      return [];
+    }
+
     $data = $block['attrs']['data'];
     $result = [];
     $repeaters = [];
-    
+
     foreach ( $data as $key => $value ) {
       if (strpos($key, '_') === 0) continue;
       if ( strpos( $key, '_' ) === false ) {
         $result[ $key ] = $value;
-        
+
         if (
-          is_numeric( $value ) && 
+          is_numeric( $value ) &&
           $value > 0 &&
-          isset( $data["_{$key}"] ) && 
+          isset( $data["_{$key}"] ) &&
           strpos( $data["_{$key}"], 'field_' ) === 0
         ) {
           $repeaters[ $key ] = (int) $value;
         }
       }
     }
-    
+
     // Process each repeater field
     foreach ( $repeaters as $repeater_name => $count ) {
       $items = [];
-      
+
       for ( $i = 0; $i < $count; $i++ ) {
         $item = [];
         $prefix = "{$repeater_name}_{$i}_";
         $prefix_length = strlen( $prefix );
-        
+
         foreach ( $data as $key => $value ) {
           if ( strpos( $key, '_' ) === 0 ) continue;
-          
+
           // Check for correct return values.
           if ( strpos( $key, $prefix ) === 0 ) {
             // $acf_key = $data["_$key"];
@@ -447,15 +529,15 @@ class Register_Blocks {
             $item[ $field_name ] = $value;
           }
         }
-        
+
         if ( ! empty( $item ) ) {
           $items[] = $item;
         }
       }
-      
+
       $result[ $repeater_name ] = $items;
     }
-    
+
     return $result;
   }
 
@@ -465,28 +547,28 @@ class Register_Blocks {
     $mode = isset( $block['mode'] ) ? $block['mode'] : '';
     $align = isset( $block['align'] ) ? $block['align'] : '';
     $anchor = isset( $block['anchor'] ) ? $block['anchor'] : '';
-    
+
     $attributes = [
       'name' => $name,
       'data' => $data
     ];
-    
+
     if ( ! empty( $mode ) ) {
       $attributes['mode'] = $mode;
     }
-    
+
     if ( ! empty( $align ) ) {
       $attributes['align'] = $align;
     }
-    
+
     if ( ! empty( $anchor ) ) {
       $attributes['anchor'] = $anchor;
     }
-    
+
     $json_attributes = json_encode( $attributes, JSON_UNESCAPED_SLASHES );
     $json_attributes = str_replace( '--', '\u002d\u002d', $json_attributes );
     $block_string = "<!-- wp:{$name} {$json_attributes} /-->";
-    
+
     return $block_string;
   }
 
