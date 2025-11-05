@@ -120,8 +120,17 @@ class Register_Blocks_ACF_V3 {
    * Requests nextjs /block-preview route in an iframe with minimal re-rendering
    */
   public function render_nextpress_block( $block, $content = '', $is_preview = false, $post_id = 0 ) {
-    $block_name = str_replace('acf/', '', $block['name']);
-    $inner_blocks = get_field('inner_blocks');
+    $block_name = str_replace( 'acf/', '', $block['name'] );
+
+    // Find inner blocks.
+    $ib_field_name = str_replace( '--', '-', $block_name );
+    $inner_blocks = [];
+    if ( isset( $block['data']['inner_blocks'] ) ) {
+      $inner_blocks = $block['data']['inner_blocks'];
+    } else if ( isset( $block['data']["field_{$ib_field_name}-block_inner_blocks"] ) ) {
+      $inner_blocks = $block['data']["field_{$ib_field_name}-block_inner_blocks"];
+    }
+
     $block_html = $this->convert_acf_block_to_string( $block );
     $block_html = $this->formatter->parse_block_data( $block_html );
     $block_html = $this->set_inner_blocks( $block, $post_id, $block_html );
