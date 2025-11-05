@@ -114,7 +114,7 @@ class API_Settings {
     global $wpdb;
     
     $query = "SELECT option_name, option_value FROM {$wpdb->options} 
-              WHERE autoload = 'yes' 
+              WHERE (autoload = 'yes' OR autoload = 'on') 
               AND option_name NOT LIKE '_transient_%' 
               AND option_name NOT LIKE '_site_transient_%'
               ORDER BY option_name";
