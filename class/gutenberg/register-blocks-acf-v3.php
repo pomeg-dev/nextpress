@@ -122,6 +122,7 @@ class Register_Blocks_ACF_V3 {
   public function render_nextpress_block( $block, $content = '', $is_preview = false, $post_id = 0 ) {
     $block_name = str_replace( 'acf/', '', $block['name'] );
 
+
     // Find inner blocks.
     $ib_field_name = str_replace( '--', '-', $block_name );
     $inner_blocks = [];
@@ -133,7 +134,7 @@ class Register_Blocks_ACF_V3 {
 
     $block_html = $this->convert_acf_block_to_string( $block );
     $block_html = $this->formatter->parse_block_data( $block_html );
-    $block_html = $this->set_inner_blocks( $block, $post_id, $block_html );
+    $block_html = $this->set_inner_blocks( $block, $post_id, $block_html, $content );
 
     $block_prefix = isset( $block_html[0]['slug'] )
         ? 'field_' . str_replace( 'acf-', '', $block_html[0]['slug'] ) . '-block_'
@@ -155,12 +156,9 @@ class Register_Blocks_ACF_V3 {
     // Create a hash of the content for change detection
     $content_hash = md5( $block_html );
 
-    // np_dumper( '$block_html' );
-    // np_dumper( $block_html );
-    // np_dumper( $encoded_content );
-
     // Initial iframe with loading state
     echo "<div id='block_wrapper_{$iframe_id}' class='nextpress-block-wrapper' data-block-id='{$block['id']}'>";
+    echo "<h4 style=\"margin: 0; color: #007cba; padding: 4px; border-bottom: 1px dashed #007cba;\">Block: " . ucfirst( str_replace( '-', ' ', $block_name ) ) . "</h4>";
     echo "<div id='loading_{$iframe_id}' class='nextpress-loading' style='display: flex; align-items: center; justify-content: center; height: 100px; background: #f0f0f1; border: 1px dashed #ccc;'>";
     echo "<span>Loading preview...</span>";
     echo "</div>";
@@ -379,7 +377,7 @@ class Register_Blocks_ACF_V3 {
         position: relative;
         border: 2px solid #007cba;
         background-color: #f0f0f1;
-        margin: 0 0 10px;
+        margin: 0;
     }
 
     .nextpress-loading {
@@ -394,101 +392,146 @@ class Register_Blocks_ACF_V3 {
     }
     </style>
 
-    <div class="nextpress-block" style="border: 2px solid #007cba; padding: 10px; margin: 0 0 10px; background-color: #f0f0f1;">
-        <h4 style="margin: 0; color: #007cba;">Block: <?php echo ucfirst( str_replace( '-', ' ', $block_name ) ); ?></h4>
 
-        <?php
-        $block_template = [
-            [
-                'core/paragraph',
-                [
-                    'placeholder' => __( 'Type / to choose a block', 'luna' ),
-                ],
-            ],
-        ];
-        $allowed_blocks = $inner_blocks ?? [];
-        if ( ! empty( $inner_blocks ) ) :
-            ?>
-            <InnerBlocks
-                template="<?php echo esc_attr( wp_json_encode( $block_template ) ); ?>"
-                <?php
-                if ( $allowed_blocks && $allowed_blocks[0] !== 'all' ) :
-                    ?>
-                    allowedBlocks="<?php echo esc_attr( wp_json_encode( $allowed_blocks ) ); ?>"
-                    <?php
-                endif;
-                ?>
-            />
-            <?php
-        endif;
-        ?>
-    </div>
     <?php
+    $block_template = [
+      [
+        'core/paragraph',
+        [
+          'placeholder' => __( 'Type / to choose a block', 'luna' ),
+        ],
+      ],
+    ];
+    $allowed_blocks = $inner_blocks ?? [];
+    if ( ! empty( $inner_blocks ) ) :
+      ?>
+      <div class="nextpress-block" style="border: 2px solid #007cba; padding: 0 10px; margin: 0; background-color: #f0f0f1;">
+        <h5 style="margin: 10px 0 0; color: #007cba; padding: 0 0 10px; border-bottom: 1px dotted #007cba;">Inner blocks:</h5>
+        <InnerBlocks
+            template="<?php echo esc_attr( wp_json_encode( $block_template ) ); ?>"
+            <?php
+            if ( $allowed_blocks && $allowed_blocks[0] !== 'all' ) :
+                ?>
+                allowedBlocks="<?php echo esc_attr( wp_json_encode( $allowed_blocks ) ); ?>"
+                <?php
+            endif;
+            ?>
+        />
+        </div>
+        <?php
+    endif;
   }
 
   /**
    * Parse post content and try to set inner blocks into block_html, including Patterns
    */
-  private function set_inner_blocks( $block, $post_id, $block_html ) {
-    $post_content = get_post_field( 'post_content', $post_id );
-    if ( ! $post_content ) {
-      return $block_html;
+  private function set_inner_blocks( $block, $post_id, $block_html, $content = '' ) {
+    // First, try to get innerBlocks directly from the $block parameter (ACF V3)
+    // This handles the case where the block is being rendered before saving
+    $inner_blocks = isset( $block['innerBlocks'] ) ? $block['innerBlocks'] : [];
+
+    // If no innerBlocks found in $block, try parsing from $content parameter (ACF passes rendered innerBlocks here)
+    if ( empty( $inner_blocks ) && ! empty( $content ) ) {
+      // Parse the content to extract inner blocks
+      $parsed_content = parse_blocks( $content );
+      if ( ! empty( $parsed_content ) ) {
+        $inner_blocks = array_filter( $parsed_content, function( $block ) {
+          return isset( $block['blockName'] ) && ! empty( $block['blockName'] );
+        });
+      }
     }
 
-    $all_blocks = parse_blocks( $post_content );
-    $all_blocks = array_filter($all_blocks, function( $content_block ) use ( $block ) {
-      return isset( $content_block['blockName'] )
-        && is_string( $content_block['blockName'] )
-        && $content_block['blockName'] !== ''
-        && isset( $block['name'] )
-        && $content_block['blockName'] === $block['name']
-        && isset( $content_block['attrs']['anchor'] )
-        && isset( $block['anchor'] )
-        && $content_block['attrs']['anchor'] === $block['anchor']
-        && isset( $content_block['attrs']['nextpress_id'] )
-        && isset( $block['nextpress_id'] )
-        && $content_block['attrs']['nextpress_id'] === $block['nextpress_id'];
-    });
-
-    if ( !empty( $all_blocks ) ) {
-      $all_blocks = array_values( $all_blocks );
-      $block_content = $all_blocks[0];
-
-      $inner_blocks = isset( $block_content['innerBlocks'] ) ? $block_content['innerBlocks'] : [];
-      if ( empty( $inner_blocks ) ) {
+    // If still no innerBlocks found, try parsing from saved post content
+    if ( empty( $inner_blocks ) ) {
+      $post_content = get_post_field( 'post_content', $post_id );
+      if ( ! $post_content ) {
         return $block_html;
       }
 
-      foreach ( $inner_blocks as $key => $nested_block ) {
-        // Handle reusable blocks (patterns)
-        if ( isset( $nested_block['blockName'] ) && $nested_block['blockName'] === 'core/block' ) {
-          $pattern_id = isset( $nested_block['attrs']['ref'] ) ? $nested_block['attrs']['ref'] : null;
+      $all_blocks = parse_blocks( $post_content );
 
-          if ( $pattern_id ) {
-            $pattern_post = get_post( $pattern_id );
+      $all_blocks = array_filter($all_blocks, function( $content_block ) use ( $block ) {
+        // Match by block name and anchor (required)
+        $name_match = isset( $content_block['blockName'] )
+          && is_string( $content_block['blockName'] )
+          && $content_block['blockName'] !== ''
+          && isset( $block['name'] )
+          && $content_block['blockName'] === $block['name'];
 
-            if ( $pattern_post && $pattern_post->post_type === 'wp_block' ) {
-              $pattern_blocks = parse_blocks( $pattern_post->post_content );
-              foreach ( $pattern_blocks as &$inner_pattern_block ) {
-                if ( isset( $inner_pattern_block['attrs']['data'] ) ) {
-                  $inner_pattern_block['data'] = $inner_pattern_block['attrs']['data'];
-                } else {
-                  $inner_pattern_block['data'] = isset( $inner_pattern_block['attrs'] ) ? $inner_pattern_block['attrs'] : [];
-                }
-              }
-              $inner_blocks[ $key ]['innerBlocks'] = $pattern_blocks;
+        $anchor_match = isset( $content_block['attrs']['anchor'] )
+          && isset( $block['anchor'] )
+          && $content_block['attrs']['anchor'] === $block['anchor'];
+
+        // nextpress_id match is optional (only check if both exist)
+        $nextpress_match = true;
+        if ( isset( $block['nextpress_id'] ) && isset( $content_block['attrs']['nextpress_id'] ) ) {
+          $nextpress_match = $content_block['attrs']['nextpress_id'] === $block['nextpress_id'];
+        }
+
+        return $name_match && $anchor_match && $nextpress_match;
+      });
+
+      if ( !empty( $all_blocks ) ) {
+        $all_blocks = array_values( $all_blocks );
+
+        // If we found multiple matches, try to narrow down
+        if ( count($all_blocks) > 1 ) {
+          // Try to narrow down using nextpress_id if available
+          if ( isset($block['nextpress_id']) ) {
+            $filtered = array_filter($all_blocks, function($b) use ($block) {
+              return isset($b['attrs']['nextpress_id']) && $b['attrs']['nextpress_id'] === $block['nextpress_id'];
+            });
+            if ( !empty($filtered) ) {
+              $all_blocks = array_values($filtered);
             }
           }
-        } else {
-          // Parse ACF repeater fields for regular blocks
-          $nested_block['data'] = $this->parse_acf_repeater_fields( $nested_block, $post_id );
-          $inner_blocks[ $key ] = $nested_block;
-          unset( $inner_blocks[ $key ]['attrs'] );
-        }
-      }
 
-      $block_html[0]['innerBlocks'] = $inner_blocks;
+          // If still multiple matches, skip innerBlocks to avoid wrong data
+          if ( count($all_blocks) > 1 ) {
+            return $block_html; // Return early without innerBlocks
+          }
+        }
+
+        // At this point we have exactly 1 match - safe to use it
+        $block_content = $all_blocks[0];
+        $inner_blocks = isset( $block_content['innerBlocks'] ) ? $block_content['innerBlocks'] : [];
+      }
     }
+
+    // If still no innerBlocks found, return original block_html
+    if ( empty( $inner_blocks ) ) {
+      return $block_html;
+    }
+
+    foreach ( $inner_blocks as $key => $nested_block ) {
+      // Handle reusable blocks (patterns)
+      if ( isset( $nested_block['blockName'] ) && $nested_block['blockName'] === 'core/block' ) {
+        $pattern_id = isset( $nested_block['attrs']['ref'] ) ? $nested_block['attrs']['ref'] : null;
+
+        if ( $pattern_id ) {
+          $pattern_post = get_post( $pattern_id );
+
+          if ( $pattern_post && $pattern_post->post_type === 'wp_block' ) {
+            $pattern_blocks = parse_blocks( $pattern_post->post_content );
+            foreach ( $pattern_blocks as &$inner_pattern_block ) {
+              if ( isset( $inner_pattern_block['attrs']['data'] ) ) {
+                $inner_pattern_block['data'] = $inner_pattern_block['attrs']['data'];
+              } else {
+                $inner_pattern_block['data'] = isset( $inner_pattern_block['attrs'] ) ? $inner_pattern_block['attrs'] : [];
+              }
+            }
+            $inner_blocks[ $key ]['innerBlocks'] = $pattern_blocks;
+          }
+        }
+      } else {
+        // Parse ACF repeater fields for regular blocks
+        $nested_block['data'] = $this->parse_acf_repeater_fields( $nested_block, $post_id );
+        $inner_blocks[ $key ] = $nested_block;
+        unset( $inner_blocks[ $key ]['attrs'] );
+      }
+    }
+
+    $block_html[0]['innerBlocks'] = $inner_blocks;
 
     return $block_html;
   }
