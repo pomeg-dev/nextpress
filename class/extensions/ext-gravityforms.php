@@ -23,7 +23,7 @@ class Ext_GravityForms {
     if ( $is_gf ) {
       $block_data['gfData'] = \GFAPI::get_form( str_replace( 'form_id_', '', $block_data['gravity_form'] ) );
       return $block_data;
-    } else {
+    } elseif ( $block_data && is_array( $block_data ) ) {
       // Check if any fields are keyed with 'gravity' and 'form'.
       $keys = array_keys( $block_data );
       foreach ( $keys as $key ) {
