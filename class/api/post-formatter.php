@@ -378,7 +378,7 @@ class Post_Formatter {
     $breadcrumbs .= '</nav>';
 
     $formatted_post['breadcrumbs'] = $breadcrumbs;
-    return $formatted_post;
+    return apply_filters( 'nextpress_breadcrumbs', $formatted_post );
   }
 
   private function return_post_revision_for_preview( $formatted_post ) {
