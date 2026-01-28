@@ -373,6 +373,10 @@ class Register_Blocks_ACF_V3 {
     </script>
 
     <style>
+    .wp-block.acf-block-preview {
+      max-width: none !important;
+    }
+
     .nextpress-block-wrapper {
         position: relative;
         border: 2px solid #007cba;
