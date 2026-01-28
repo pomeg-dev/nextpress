@@ -353,32 +353,32 @@ class Post_Formatter {
   private function include_breadcrumbs( $formatted_post ) {
     $post = get_post( $formatted_post['id'] );
     $breadcrumbs = '<nav class="breadcrumbs">';
-    $breadcrumbs .= '<a href="' . home_url() . '">Home</a>';
+    $breadcrumbs .= '<a class="home" href="' . home_url() . '">Home</a>';
 
     if ( $post->post_type === 'post' ) {
       $page_for_posts = get_option( 'page_for_posts' );
 
-      $breadcrumbs .= ' | <a href="' . get_post_type_archive_link( $post->post_type ) . '">' . get_the_title( $page_for_posts ) . '</a>';
+      $breadcrumbs .= '<span class="separator"> | </span><a class="type-archive" href="' . get_post_type_archive_link( $post->post_type ) . '">' . get_the_title( $page_for_posts ) . '</a>';
 
-      $breadcrumbs .= ' | <span>' . get_the_title( $post ) . '</span>';
+      $breadcrumbs .= '<span class="separator"> | </span><span class="current">' . get_the_title( $post ) . '</span>';
     } elseif ( $post->post_type === 'page' ) {
       if ( $post->post_parent ) {
         $parent_id = $post->post_parent;
         $parent_links = [];
         while ( $parent_id ) {
             $page = get_post( $parent_id );
-            $parent_links[] = '<a href="' . get_permalink( $page->ID ) . '">' . get_the_title( $page->ID ) . '</a>';
+            $parent_links[] = '<a class="parent" href="' . get_permalink( $page->ID ) . '">' . get_the_title( $page->ID ) . '</a>';
             $parent_id = $page->post_parent;
         }
         $parent_links = array_reverse( $parent_links );
-        $breadcrumbs .= ' | ' . implode( ' | ', $parent_links );
+        $breadcrumbs .= '<span class="separator"> | </span>' . implode( '<span class="separator"> | </span>', $parent_links );
       }
-      $breadcrumbs .= ' | <span>' . get_the_title( $post ) . '</span>';
+      $breadcrumbs .= '<span class="separator"> | </span><span class="current">' . get_the_title( $post ) . '</span>';
     }
     $breadcrumbs .= '</nav>';
 
     $formatted_post['breadcrumbs'] = $breadcrumbs;
-    return $formatted_post;
+    return apply_filters( 'nextpress_breadcrumbs', $formatted_post );
   }
 
   private function return_post_revision_for_preview( $formatted_post ) {

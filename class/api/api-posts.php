@@ -133,10 +133,11 @@ class API_Posts {
 
   public function get_tax_terms( $request ) {
     $taxonomy = $request->get_param( 'taxonomy' );
+    $hide_empty = $request->get_param( 'hide_empty' );
     $terms = get_terms(
       [
         'taxonomy' => $taxonomy,
-        'hide_empty' => false,
+        'hide_empty' => $hide_empty || false,
       ]
     );
 
