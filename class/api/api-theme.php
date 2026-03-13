@@ -30,6 +30,7 @@ class API_Theme {
       [
         'methods' => 'GET',
         'callback' => [ $this, 'get_theme_json' ],
+        'permission_callback' => '__return_true',
       ]
     );
 
@@ -40,6 +41,7 @@ class API_Theme {
       [
         'methods' => 'GET',
         'callback' => [ $this, 'get_block_theme' ],
+        'permission_callback' => '__return_true',
       ]
     );
   }

@@ -46,11 +46,56 @@ class Register_Blocks_ACF_V3 {
       return;
     }
 
+    // CRITICAL FIX: Only fetch blocks when actually needed (post editor, templates page, REST API)
+    // This prevents unnecessary HTTP requests on posts list, pages list, settings, etc.
+    $should_fetch_blocks = false;
+
+    global $pagenow;
+
+    // Check if this is a REST API request (multiple detection methods)
+    $is_rest_request = (
+      ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ||
+      ( isset( $_SERVER['REQUEST_URI'] ) && strpos( $_SERVER['REQUEST_URI'], '/wp-json/' ) !== false )
+    );
+
+    // Check if we're in admin and on specific pages that need blocks
+    if ( is_admin() ) {
+      $allowed_pages = [
+        'post.php',           // Editing existing post
+        'post-new.php',       // Creating new post
+        'admin-ajax.php',     // Admin ajax requests
+      ];
+
+      // Check for templates admin page
+      $is_np_page = (
+        $pagenow === 'admin.php' &&
+        isset( $_GET['page'] ) && ( $_GET['page'] === 'templates' || $_GET['page'] === 'acf-options-settings' )
+      );
+
+      if ( in_array( $pagenow, $allowed_pages ) || $is_np_page ) {
+        $should_fetch_blocks = true;
+      }
+    }
+
+    // Always fetch for REST API requests (needed for block editor and frontend API calls)
+    if ( $is_rest_request ) {
+      $should_fetch_blocks = true;
+    }
+
+    // Allow manual override via query param for testing
+    if ( isset( $_GET['nextpress_register_blocks'] ) ) {
+      $should_fetch_blocks = true;
+    }
+
+    if ( ! $should_fetch_blocks ) {
+      return;
+    }
+
     $themes = get_field( 'blocks_theme', 'option' );
     $blocks = $this->helpers->fetch_blocks_from_api( $themes, 'blocks' );
 
     if ( ! $blocks ) {
-      error_log('Failed to fetch blocks from API');
+      error_log('Nextpress: Failed to fetch blocks from API');
       return;
     }
 
@@ -121,7 +166,6 @@ class Register_Blocks_ACF_V3 {
    */
   public function render_nextpress_block( $block, $content = '', $is_preview = false, $post_id = 0 ) {
     $block_name = str_replace( 'acf/', '', $block['name'] );
-
 
     // Find inner blocks.
     $ib_field_name = str_replace( '--', '-', $block_name );
@@ -373,10 +417,6 @@ class Register_Blocks_ACF_V3 {
     </script>
 
     <style>
-    .wp-block.acf-block-preview {
-      max-width: none !important;
-    }
-
     .nextpress-block-wrapper {
         position: relative;
         border: 2px solid #007cba;

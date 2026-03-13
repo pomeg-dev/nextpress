@@ -167,7 +167,7 @@ class Helpers {
       );
 
       // Increment request counter
-      set_transient( $rate_limit_key, $current_requests + 1, 30 );
+      $this->set_transient_no_autoload( $rate_limit_key, $current_requests + 1, 30 );
   
       if ( is_wp_error( $response ) ) {
         error_log( 'API request failed: ' . $response->get_error_message() );
@@ -179,11 +179,11 @@ class Helpers {
         
         // After 3 consecutive failures, activate circuit breaker for 5 minutes
         if ( $failure_count >= 3 ) {
-          set_transient( $circuit_breaker_key, true, 300 ); // 5 minutes
+          $this->set_transient_no_autoload( $circuit_breaker_key, true, 300 ); // 5 minutes
           delete_transient( $failure_count_key );
           error_log( 'Circuit breaker activated due to repeated API failures' );
         } else {
-          set_transient( $failure_count_key, $failure_count, 300 );
+          $this->set_transient_no_autoload( $failure_count_key, $failure_count, 300 );
         }
         
         return false;
@@ -200,11 +200,11 @@ class Helpers {
         
         // After 3 consecutive failures, activate circuit breaker for 5 minutes
         if ( $failure_count >= 3 ) {
-          set_transient( $circuit_breaker_key, true, 300 ); // 5 minutes
+          $this->set_transient_no_autoload( $circuit_breaker_key, true, 300 ); // 5 minutes
           delete_transient( $failure_count_key );
           error_log( 'Circuit breaker activated due to repeated API failures' );
         } else {
-          set_transient( $failure_count_key, $failure_count, 300 );
+          $this->set_transient_no_autoload( $failure_count_key, $failure_count, 300 );
         }
         
         return false;
@@ -215,15 +215,136 @@ class Helpers {
   
       $body = wp_remote_retrieve_body( $response );
       $data = json_decode( $body, true );
-  
+
       if ( json_last_error() !== JSON_ERROR_NONE ) {
         error_log( 'Failed to parse API response: ' . json_last_error_msg() );
         return false;
       }
-  
-      set_transient( $cache_key, $data );
+
+      // CRITICAL FIX: Set proper cache expiration (was missing, causing no caching!)
+      // Cache blocks for 12 hours - they rarely change
+      $cache_ttl = apply_filters( 'nextpress_blocks_cache_ttl', 12 * HOUR_IN_SECONDS );
+      $this->set_transient_no_autoload( $cache_key, $data, $cache_ttl );
       return $data;
     }
+  }
+
+  /**
+   * CRITICAL FIX: Set transient with autoload='no' to prevent options table bloat
+   *
+   * WordPress set_transient() creates options with autoload='yes' by default when
+   * no object cache is available. This causes massive performance issues as ALL
+   * autoloaded options are loaded on EVERY request.
+   *
+   * @param string $transient Transient name (without _transient_ prefix)
+   * @param mixed $value Transient value
+   * @param int $expiration Time until expiration in seconds
+   * @return bool True on success, false on failure
+   */
+  public function set_transient_no_autoload( $transient, $value, $expiration = 0 ) {
+    global $wpdb;
+
+    // First, set the transient normally
+    $result = set_transient( $transient, $value, $expiration );
+
+    // Then, ensure autoload is set to 'no' for both the transient and its timeout
+    // This prevents these from being loaded on every page request
+    $option_names = [
+      '_transient_' . $transient,
+      '_transient_timeout_' . $transient
+    ];
+
+    foreach ( $option_names as $option_name ) {
+      $wpdb->query(
+        $wpdb->prepare(
+          "UPDATE {$wpdb->options} SET autoload = 'no' WHERE option_name = %s",
+          $option_name
+        )
+      );
+    }
+
+    return $result;
+  }
+
+  /**
+   * REDIS-AWARE CACHE: Set cache value using Redis if available, fallback to transient
+   *
+   * This method provides a unified caching interface that:
+   * - Uses wp_cache_set() when Redis/object cache is available (optimal performance)
+   * - Falls back to set_transient_no_autoload() when no object cache (prevents autoload bloat)
+   *
+   * @param string $key Cache key
+   * @param mixed $value Value to cache
+   * @param string $group Cache group (used for wp_cache, prepended to transient key)
+   * @param int $expiration Time until expiration in seconds
+   * @return bool True on success, false on failure
+   */
+  public function cache_set( $key, $value, $group = '', $expiration = 0 ) {
+    // Prefer object cache (Redis) when available - this is the optimal path
+    if ( wp_using_ext_object_cache() ) {
+      return wp_cache_set( $key, $value, $group, $expiration );
+    }
+
+    // Fall back to transient with autoload='no' to prevent database bloat
+    $transient_key = $group ? $group . '_' . $key : $key;
+    return $this->set_transient_no_autoload( $transient_key, $value, $expiration );
+  }
+
+  /**
+   * REDIS-AWARE CACHE: Get cache value using Redis if available, fallback to transient
+   *
+   * @param string $key Cache key
+   * @param string $group Cache group (used for wp_cache, prepended to transient key)
+   * @return mixed|false Cached value or false if not found
+   */
+  public function cache_get( $key, $group = '' ) {
+    if ( wp_using_ext_object_cache() ) {
+      return wp_cache_get( $key, $group );
+    }
+
+    $transient_key = $group ? $group . '_' . $key : $key;
+    return get_transient( $transient_key );
+  }
+
+  /**
+   * REDIS-AWARE CACHE: Delete cache value
+   *
+   * @param string $key Cache key
+   * @param string $group Cache group
+   * @return bool True on success, false on failure
+   */
+  public function cache_delete( $key, $group = '' ) {
+    if ( wp_using_ext_object_cache() ) {
+      return wp_cache_delete( $key, $group );
+    }
+
+    $transient_key = $group ? $group . '_' . $key : $key;
+    return delete_transient( $transient_key );
+  }
+
+  /**
+   * REDIS-AWARE CACHE: Flush entire cache group
+   *
+   * @param string $group Cache group to flush
+   * @return bool True on success
+   */
+  public function cache_flush_group( $group ) {
+    if ( wp_using_ext_object_cache() ) {
+      return wp_cache_flush_group( $group );
+    }
+
+    // Without object cache, we need to manually delete matching transients
+    // This is slower but necessary for the fallback path
+    global $wpdb;
+    $pattern = $group . '_%';
+    $wpdb->query(
+      $wpdb->prepare(
+        "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
+        '_transient_' . $pattern,
+        '_transient_timeout_' . $pattern
+      )
+    );
+    return true;
   }
 
   /**

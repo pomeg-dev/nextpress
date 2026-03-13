@@ -76,22 +76,72 @@ class API_Posts {
     $params = $request->get_params();
 
     // Set cache tags.
-    $cache_tag = isset( $params['cache_tag'] ) && $params['cache_tag'] 
-      ? $params['cache_tag'] 
+    $cache_tag = isset( $params['cache_tag'] ) && $params['cache_tag']
+      ? $params['cache_tag']
       : false;
-    
+
     if ( $cache_tag ) {
       $cached_tags = get_transient( 'np_cache_tags' ) ?: [];
       $cached_tags[] = $cache_tag;
       $cached_tags = array_unique( $cached_tags );
-      set_transient( 'np_cache_tags', $cached_tags, HOUR_IN_SECONDS );
+      $this->helpers->set_transient_no_autoload( 'np_cache_tags', $cached_tags, HOUR_IN_SECONDS );
       unset( $params['cache_tag'] );
     }
 
     // Run query.
     $args = $this->prepare_query_args( $params );
-    if ( isset( $params['slug_only'] ) && $params['slug_only'] ) {
+    $is_slug_only = isset( $params['slug_only'] ) && $params['slug_only'];
+
+    // CRITICAL FIX: Cache stampede protection (Redis-aware)
+    $cache_key = $this->generate_cache_key( 'nextpress_posts', $args );
+    $mutex_key = $cache_key . '_lock';
+
+    // Check cache first (uses Redis when available)
+    $cached = $this->helpers->cache_get( $cache_key, 'nextpress_posts' );
+    if ( $cached !== false ) {
+      $response = new \WP_REST_Response( $cached['posts'] );
+      $response->header( 'X-WP-Total', $cached['total'] );
+      $response->header( 'X-WP-TotalPages', $cached['pages'] );
+      $response->header( 'X-Cache', 'HIT' );
+      return $response;
+    }
+
+    // Mutex lock to prevent stampede
+    $lock_acquired = false;
+    $wait_count = 0;
+    while ( ! $lock_acquired && $wait_count < 10 ) {
+      // Try to acquire lock (only succeeds if key doesn't exist)
+      if ( wp_using_ext_object_cache() ) {
+        $lock_acquired = wp_cache_add( $mutex_key, 1, 'nextpress_posts', 30 );
+      } else {
+        // Transient-based locking for fallback
+        $lock_acquired = ( get_transient( 'nextpress_posts_' . $mutex_key ) === false );
+        if ( $lock_acquired ) {
+          set_transient( 'nextpress_posts_' . $mutex_key, 1, 30 );
+        }
+      }
+
+      if ( ! $lock_acquired ) {
+        usleep( 500000 ); // Wait 500ms
+        $wait_count++;
+        // Check if cache appeared while waiting
+        $cached = $this->helpers->cache_get( $cache_key, 'nextpress_posts' );
+        if ( $cached !== false ) {
+          $response = new \WP_REST_Response( $cached['posts'] );
+          $response->header( 'X-WP-Total', $cached['total'] );
+          $response->header( 'X-WP-TotalPages', $cached['pages'] );
+          $response->header( 'X-Cache', 'HIT-WAIT' );
+          return $response;
+        }
+      }
+    }
+
+    // Optimize slug_only queries - no need for post objects
+    if ( $is_slug_only ) {
       $args['fields'] = 'ids';
+      $args['no_found_rows'] = true; // Skip pagination counting
+      $args['update_post_meta_cache'] = false; // Skip meta cache
+      $args['update_post_term_cache'] = false; // Skip term cache
     }
 
     // If publicly_queryable is true.
@@ -104,29 +154,61 @@ class API_Posts {
       $args['post_type'] = $queryable_post_types;
     }
 
-    // Use wp caching with optimized key generation.
-    $key = $this->generate_cache_key( 'posts_query', $args );
+    // Execute query (only one process per unique query reaches here)
     $query = new \WP_Query( $args );
     $posts = $query->posts;
 
-    $formatted_posts = array_map( function ( $post ) use ( $params ) {
+    // Prime caches to prevent N+1 queries
+    if ( ! empty( $posts ) ) {
+      // Get post IDs - different handling for fields=ids vs full posts
+      $post_ids = $is_slug_only
+        ? $posts  // Already IDs when fields=ids
+        : wp_list_pluck( $posts, 'ID' ); // Extract IDs from post objects
+
+      if ( $is_slug_only ) {
+        // For slug_only, we only need permalinks - bulk load post data
+        _prime_post_caches( $post_ids, false, false );
+      } else {
+        // For full formatting, bulk load everything
+        // Bulk load post meta
+        update_meta_cache( 'post', $post_ids );
+
+        // Bulk load term relationships
+        $post_types = array_unique( wp_list_pluck( $posts, 'post_type' ) );
+        update_object_term_cache( $post_ids, $post_types );
+      }
+    }
+
+    $formatted_posts = array_map( function ( $post ) use ( $params, $is_slug_only ) {
       $include_content = isset( $params['include_content'] )
         ? $params['include_content']
         : false;
       $include_metadata = isset( $params['include_metadata'] )
         ? $params['include_metadata']
         : true;
-      return isset( $params['slug_only'] ) && $params['slug_only']
-        ? $this->formatter->get_slug( $post ) 
+      return $is_slug_only
+        ? $this->formatter->get_slug( $post )
         : $this->formatter->format_post( $post, $include_content, $include_metadata );
     }, $posts );
 
-    $response = new \WP_REST_Response( $formatted_posts );
     $total = $query->found_posts;
     $total_pages = $query->max_num_pages;
 
+    // Store in cache for 1 hour (uses Redis when available)
+    $cache_ttl = apply_filters( 'nextpress_posts_cache_ttl', HOUR_IN_SECONDS );
+    $this->helpers->cache_set( $cache_key, [
+      'posts' => $formatted_posts,
+      'total' => $total,
+      'pages' => $total_pages
+    ], 'nextpress_posts', $cache_ttl );
+
+    // Release mutex lock
+    $this->helpers->cache_delete( $mutex_key, 'nextpress_posts' );
+
+    $response = new \WP_REST_Response( $formatted_posts );
     $response->header( 'X-WP-Total', $total );
     $response->header( 'X-WP-TotalPages', $total_pages );
+    $response->header( 'X-Cache', 'MISS' );
 
     return $response;
   }
@@ -174,7 +256,7 @@ class API_Posts {
 
     foreach ( $params as $key => $value ) {
       $value = ( is_string( $value ) && strpos( $value, ',' ) !== false )
-        ? explode( ',', $value ) 
+        ? explode( ',', $value )
         : $value;
       $args[ $key ] = $value;
     }
@@ -185,17 +267,33 @@ class API_Posts {
     $args = wp_parse_args(
       $args,
       [
-        'post_type' => isset( $args['post_type'] ) 
+        'post_type' => isset( $args['post_type'] )
           ? $args['post_type']
           : 'any',
-        'post_status' => isset( $args['post_status'] ) 
+        'post_status' => isset( $args['post_status'] )
           ? $args['post_status']
           : 'publish',
-        'posts_per_page' => isset( $args['posts_per_page'] ) 
-          ? $args['posts_per_page'] 
+        'posts_per_page' => isset( $args['posts_per_page'] )
+          ? $args['posts_per_page']
           : get_option( 'posts_per_page' ),
       ]
     );
+
+    // CRITICAL FIX: Cap unbounded queries to prevent performance issues
+    // per_page=-1 was causing 30-90s response times on faculty queries
+    if ( isset( $args['posts_per_page'] ) && $args['posts_per_page'] == -1 ) {
+      // Allow override via filter for specific use cases
+      $max_per_page = apply_filters( 'nextpress_max_posts_per_page', 150 );
+      $args['posts_per_page'] = $max_per_page;
+
+      // Log warning for monitoring
+      error_log( sprintf(
+        'Nextpress: Unbounded query capped to %d posts (post_type: %s, params: %s)',
+        $max_per_page,
+        is_array( $args['post_type'] ) ? implode( ',', $args['post_type'] ) : $args['post_type'],
+        isset( $params['filter_department'] ) ? 'filter_department=' . $params['filter_department'] : 'none'
+      ) );
+    }
 
     return $args;
   }
@@ -313,9 +411,13 @@ class API_Posts {
 
     $post = get_post( $post_id );
     if ( ! $post ) return;
-    
+
     $post_type = $post->post_type;
     if ( $post_type === "nav_menu_item" ) return;
+
+    // CRITICAL FIX: Clear wp_cache group to invalidate all cached posts queries
+    // This ensures the stampede-protected cache is cleared on post updates
+    wp_cache_flush_group( 'nextpress_posts' );
 
     // Revalidate post IDs.
     $ids_revalidated = false;
@@ -331,7 +433,7 @@ class API_Posts {
         }
       }
     }
-    
+
     // Revalidate cpt.
     if ( ! $ids_revalidated ) {
       $this->helpers->revalidate_fetch_route( "post-type-{$post_type}" );

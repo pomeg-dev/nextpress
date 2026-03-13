@@ -47,6 +47,7 @@ class API_Settings {
       [
         'methods' => 'GET',
         'callback' => [ $this, 'get_settings' ],
+        'permission_callback' => '__return_true',
         'args' => [
           'keys' => [
             'description' => 'Comma-separated list of specific setting keys to return',

@@ -66,7 +66,7 @@ class Post_Formatter {
     if ( $include_metadata ) {
       $formatted_post = apply_filters( 'nextpress_post_object_w_meta', $formatted_post );
     }
-    
+
     return apply_filters( 'nextpress_post_object', $formatted_post );
   }
 

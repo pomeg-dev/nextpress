@@ -53,8 +53,50 @@ class API_Router {
    * register_routes callback
    */
   public function get_post_by_path( $data ) {
+    $post_id = $data->get_param( 'p' ) ?? $data->get_param( 'page_id' );
     $path = apply_filters( 'nextpress_path', $data['path'] );
     $include_content = $data->get_param( 'include_content' ) !== 'false';
+
+    // CRITICAL FIX: Add cache stampede protection for router endpoint
+    // Uses Redis-aware helper that automatically uses Redis when available
+    $cache_key = 'nextpress_router_' . md5( $path . '_' . ( $include_content ? '1' : '0' ) );
+    if ( $post_id && ! $path ) {
+      $cache_key = 'nextpress_router_' . md5( $post_id . '_' . ( $include_content ? '1' : '0' ) );
+    }
+    $mutex_key = $cache_key . '_lock';
+
+    // Check cache first
+    $cached = $this->helpers->cache_get( $cache_key, 'nextpress_router' );
+    if ( $cached !== false ) {
+      return $cached;
+    }
+
+    // Mutex lock to prevent stampede
+    $lock_acquired = false;
+    $wait_count = 0;
+    while ( ! $lock_acquired && $wait_count < 10 ) {
+      // Try to acquire lock (only succeeds if key doesn't exist)
+      if ( wp_using_ext_object_cache() ) {
+        $lock_acquired = wp_cache_add( $mutex_key, 1, 'nextpress_router', 30 );
+      } else {
+        // Transient-based locking for fallback
+        $lock_acquired = ( get_transient( 'nextpress_router_' . $mutex_key ) === false );
+        if ( $lock_acquired ) {
+          set_transient( 'nextpress_router_' . $mutex_key, 1, 30 );
+        }
+      }
+
+      if ( ! $lock_acquired ) {
+        usleep( 500000 ); // Wait 500ms
+        $wait_count++;
+        // Check if cache appeared while waiting
+        $cached = $this->helpers->cache_get( $cache_key, 'nextpress_router' );
+        if ( $cached !== false ) {
+          return $cached;
+        }
+      }
+    }
+
     $page_for_posts_id = get_option( 'page_for_posts' );
     $page_for_posts_url = get_permalink( get_option( 'page_for_posts' ) );
     $page_for_posts_path = trim( str_replace( site_url(), '', $page_for_posts_url ), '/' );
@@ -64,9 +106,8 @@ class API_Router {
     }
 
     if ( ! $path ) {
-      $post_id = $data->get_param( 'p' ) ?? $data->get_param( 'page_id' );
-      $post = $post_id 
-        ? get_post( $post_id ) 
+      $post = $post_id
+        ? get_post( $post_id )
         : $this->helpers->get_homepage();
     } else if ( $page_for_posts_path == $path ) {
       $post = get_post( $page_for_posts_id );
@@ -99,6 +140,14 @@ class API_Router {
     }
 
     $formatted_post = $this->formatter->format_post( $post, $include_content );
+
+    // Store in cache for 1 hour (uses Redis when available)
+    $cache_ttl = apply_filters( 'nextpress_router_cache_ttl', HOUR_IN_SECONDS );
+    $this->helpers->cache_set( $cache_key, $formatted_post, 'nextpress_router', $cache_ttl );
+
+    // Release mutex lock
+    $this->helpers->cache_delete( $mutex_key, 'nextpress_router' );
+
     return $formatted_post;
   }
 
@@ -138,15 +187,18 @@ class API_Router {
     $post = get_post( $post_id );
     if ( ! $post ) return;
     if ( $post->post_type === "nav_menu_item" ) return;
-    
+
+    // CRITICAL FIX: Clear cache group to invalidate all router cache
+    $this->helpers->cache_flush_group( 'nextpress_router' );
+
     // Get the paths that need invalidation
     $paths_to_invalidate = $this->get_paths_to_invalidate( $post );
-    
+
     // Invalidate specific cache keys instead of all
     foreach ( $paths_to_invalidate as $path ) {
       $this->helpers->revalidate_specific_path( '/' . $path );
     }
-    
+
     // Only clear homepage cache if this is the homepage or affects global content
     if ( $this->affects_homepage( $post ) ) {
       $this->helpers->revalidate_specific_path( '/' );

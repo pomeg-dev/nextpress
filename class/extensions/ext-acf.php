@@ -22,11 +22,11 @@ class Ext_ACF {
   }
 
   public function add_acf_attributes( $attributes ) {
-    if ( ! $attributes['nextpress_id']) {
+    if ( ! isset( $attributes['nextpress_id'] ) ) {
       $attributes['nextpress_id'] = uniqid();
     }
 
-    if ( ! $attributes['anchor'] ) {
+    if ( ! isset( $attributes['anchor'] ) ) {
       $attributes['anchor'] = 'block-' . uniqid();
     }
 
@@ -209,14 +209,22 @@ class Ext_ACF {
 
   public function edit_attachment_response( $object, $field_name, $request ) {
     if ( $object['type'] === 'attachment' ) {
-      if ( ( $xml = simplexml_load_file($object['guid']['raw'] ) ) !== false ) {
+      // Only process SVG files - skip JPG, PNG, etc.
+      $mime_type = isset( $object['mime_type'] ) ? $object['mime_type'] : '';
+      if ( $mime_type !== 'image/svg+xml' ) {
+        return false;
+      }
+
+      // Suppress warnings and parse SVG
+      $xml = @simplexml_load_file( $object['guid']['raw'] );
+      if ( $xml !== false ) {
         $attrs = $xml->attributes();
         $viewbox = explode( ' ', $attrs->viewBox );
-        $image[1] = isset( $attrs->width ) && preg_match( '/\d+/', $attrs->width, $value ) 
-          ? (int) $value[0] 
+        $image[1] = isset( $attrs->width ) && preg_match( '/\d+/', $attrs->width, $value )
+          ? (int) $value[0]
           : (count($viewbox) == 4 ? (int) $viewbox[2] : null);
-        $image[2] = isset( $attrs->height ) && preg_match( '/\d+/', $attrs->height, $value ) 
-          ? (int) $value[0] 
+        $image[2] = isset( $attrs->height ) && preg_match( '/\d+/', $attrs->height, $value )
+          ? (int) $value[0]
           : (count($viewbox) == 4 ? (int) $viewbox[3] : null);
         return array($viewbox[2], $viewbox[3]);
       }

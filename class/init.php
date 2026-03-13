@@ -31,6 +31,7 @@ class Init {
 		new Register_Pages();
 		new Register_Settings( $this->helpers );
 		new Register_Templates( $this->helpers );
+		new Fix_Autoload_Transients();
 
 		// Register API routes
 		new API_Router( $this->helpers );
@@ -63,6 +64,9 @@ class Init {
 
 		// Clear caches if GET param set
 		add_action( 'init', [ $this, 'clear_wp_cache' ] );
+
+		// CRITICAL FIX: Add database query monitoring for performance debugging
+		add_action( 'init', [ $this, 'maybe_enable_query_monitoring' ] );
 	}
 
 	/**
@@ -116,7 +120,7 @@ class Init {
 			$req = $_SERVER['REQUEST_URI'];
     }
 
-    parse_str( parse_url( $req, PHP_URL_QUERY ), $query_params );
+    parse_str( parse_url( $req, PHP_URL_QUERY ) ?? '', $query_params );
 		if ( isset( $query_params['page_id'] ) ) {
 			$page_id = $query_params['page_id'];
 			$req = '/api/draft?secret=<token>&id=' . $page_id;
@@ -146,9 +150,24 @@ class Init {
 	}
 
 	/**
-	 * Disable editing if no blocks founf in fetch_blocks_from_api function
+	 * Disable editing if no blocks found in fetch_blocks_from_api function
+	 * OPTIMIZED: Only check when actually needed (post editor screens)
 	 */
 	public function disable_editing_if_no_blocks() {
+		// Only run this check on admin screens where we actually need blocks
+		if ( ! is_admin() ) {
+			return;
+		}
+
+		global $pagenow;
+		$relevant_pages = [ 'post.php', 'post-new.php' ];
+
+		// Don't check on irrelevant admin pages (dashboard, users, settings, etc.)
+		if ( ! in_array( $pagenow, $relevant_pages ) ) {
+			return;
+		}
+
+		// Only fetch blocks when we're actually on a page that needs them
 		$blocks = $this->helpers->fetch_blocks_from_api( null, 'init' );
 		if (empty($blocks)) {
 			add_filter( 'use_block_editor_for_post', '__return_false' );
@@ -190,5 +209,99 @@ class Init {
 				}
 			}
 		}
+	}
+
+	/**
+	 * CRITICAL FIX: Enable query monitoring for REST API requests
+	 * This helps identify slow database queries causing performance issues
+	 *
+	 * Enable via: add_filter('nextpress_enable_query_monitoring', '__return_true');
+	 * Or via query param: ?nextpress_debug_queries=1
+	 */
+	public function maybe_enable_query_monitoring() {
+		$enabled = apply_filters( 'nextpress_enable_query_monitoring', false );
+
+		// Allow override via query parameter (for authenticated users only)
+		if ( isset( $_GET['nextpress_debug_queries'] ) && current_user_can( 'manage_options' ) ) {
+			$enabled = true;
+		}
+
+		if ( ! $enabled ) {
+			return;
+		}
+
+		// Enable query tracking
+		if ( ! defined( 'SAVEQUERIES' ) ) {
+			define( 'SAVEQUERIES', true );
+		}
+
+		// Log slow queries at the end of REST API requests
+		add_action( 'rest_api_init', function() {
+			add_filter( 'rest_post_dispatch', [ $this, 'log_slow_queries_for_rest_request' ], 10, 3 );
+		});
+	}
+
+	/**
+	 * Log slow queries for REST API requests
+	 */
+	public function log_slow_queries_for_rest_request( $result, $server, $request ) {
+		global $wpdb;
+
+		if ( empty( $wpdb->queries ) ) {
+			return $result;
+		}
+
+		$slow_query_threshold = apply_filters( 'nextpress_slow_query_threshold', 1.0 ); // 1 second default
+		$slow_queries = [];
+		$total_time = 0;
+
+		foreach ( $wpdb->queries as $query ) {
+			$time = $query[1];
+			$total_time += $time;
+
+			if ( $time > $slow_query_threshold ) {
+				$slow_queries[] = [
+					'time' => $time,
+					'sql' => $query[0],
+					'trace' => $query[2]
+				];
+			}
+		}
+
+		if ( ! empty( $slow_queries ) ) {
+			error_log( sprintf(
+				'Nextpress Slow Query Report for %s:',
+				$request->get_route()
+			));
+			error_log( sprintf(
+				'Total queries: %d | Total time: %.4fs | Slow queries: %d',
+				count( $wpdb->queries ),
+				$total_time,
+				count( $slow_queries )
+			));
+
+			foreach ( $slow_queries as $i => $query ) {
+				error_log( sprintf(
+					'[Slow Query #%d] Time: %.4fs | SQL: %s',
+					$i + 1,
+					$query['time'],
+					substr( $query['sql'], 0, 200 ) // Truncate for readability
+				));
+			}
+		}
+
+		// Add header to response for debugging
+		if ( function_exists( 'rest_get_server' ) ) {
+			header( sprintf(
+				'X-DB-Queries: %d',
+				count( $wpdb->queries )
+			));
+			header( sprintf(
+				'X-DB-Time: %.4fs',
+				$total_time
+			));
+		}
+
+		return $result;
 	}
 }
