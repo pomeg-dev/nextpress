@@ -119,8 +119,6 @@ $favicon
 
 $global = new FieldsBuilder('Settings');
 $global
-    ->addFields($colors)
-    ->addFields($animation)
     ->addFields($cookie_notice)
     ->addFields($favicon)
     ->setLocation('options_page', '==', 'acf-options-styles')
