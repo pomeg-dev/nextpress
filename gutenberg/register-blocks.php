@@ -7,13 +7,16 @@ use StoutLogic\AcfBuilder\RepeaterBuilder;
 // Function to fetch blocks from the API
 function fetch_blocks_from_api($theme = null)
 {
+    $theme_key = is_array($theme) ? implode(',', $theme) : $theme;
+    $cache_key = 'nextpress_blocks_' . md5($theme_key ?? 'default');
+    $cached = wp_cache_get($cache_key, 'nextpress');
+    if ($cached !== false) {
+        return $cached;
+    }
+
     $api_url = get_blocks_api_url();
-    if ($theme) {
-        //$theme might be a string or an array of strings
-        if (is_array($theme)) {
-            $theme = implode(',', $theme);
-        }
-        $api_url .= '?theme=' . $theme;
+    if ($theme_key) {
+        $api_url .= '?theme=' . $theme_key;
     }
 
     // Resolve 'host.docker.internal' to the host IP if necessary
@@ -42,6 +45,8 @@ function fetch_blocks_from_api($theme = null)
         error_log('Failed to parse API response: ' . json_last_error_msg());
         return false;
     }
+
+    wp_cache_set($cache_key, $data, 'nextpress', HOUR_IN_SECONDS);
 
     return $data;
 }
