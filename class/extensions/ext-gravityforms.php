@@ -46,7 +46,7 @@ class Ext_GravityForms {
     // Check if contains key: gravity_form
     $is_gf = isset( $post['acf_data']['gravity_form'] );
     if ( $is_gf ) {
-      $post['acf_data']['gfData'] = \GFAPI::get_form( $post['acf_data']['gravity_form'] );
+      $post['acf_data']['gfData'] = \GFAPI::get_form( str_replace( 'form_id_', '', $post['acf_data']['gravity_form'] ) );
       return $post;
     } elseif ( isset( $post['acf_data'] ) && is_array( $post['acf_data'] ) ) {
       // Check if any fields are keyed with 'gravity' and 'form'.
@@ -54,7 +54,7 @@ class Ext_GravityForms {
       foreach ( $keys as $key ) {
         if ( strpos( $key, 'gravity' ) !== false && strpos( $key, 'form' ) !== false ) {
           $data_key = "${key}_data";
-          $post['acf_data'][ $data_key ] = \GFAPI::get_form( $post['acf_data'][ $key ] );
+          $post['acf_data'][ $data_key ] = \GFAPI::get_form( str_replace( 'form_id_', '', $post['acf_data'][ $key ] ) );
           return $post;
         }
       }
