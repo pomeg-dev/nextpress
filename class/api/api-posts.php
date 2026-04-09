@@ -415,9 +415,8 @@ class API_Posts {
     $post_type = $post->post_type;
     if ( $post_type === "nav_menu_item" ) return;
 
-    // CRITICAL FIX: Clear wp_cache group to invalidate all cached posts queries
-    // This ensures the stampede-protected cache is cleared on post updates
-    wp_cache_flush_group( 'nextpress_posts' );
+    // Clear cache group - uses Redis flush or DB transient delete depending on environment
+    $this->helpers->cache_flush_group( 'nextpress_posts' );
 
     // Revalidate post IDs.
     $ids_revalidated = false;
