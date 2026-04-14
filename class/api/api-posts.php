@@ -70,6 +70,16 @@ class API_Posts {
         'permission_callback' => '__return_true',
       ]
     );
+
+    register_rest_route(
+      'nextpress',
+      '/form/(?P<form_id>[0-9]+)',
+      [
+        'methods' => 'GET',
+        'callback' => [ $this, 'get_form' ],
+        'permission_callback' => '__return_true',
+      ]
+    );
   }
 
   public function get_posts( $request ) {
@@ -249,6 +259,22 @@ class API_Posts {
       return $response;
     }
     return new \WP_REST_Response( [] );
+  }
+
+  public function get_form( $request ) {
+    $form_id = (int) $request->get_param( 'form_id' );
+
+    if ( ! class_exists( 'GFAPI' ) ) {
+      return new \WP_REST_Response( [ 'error' => 'Gravity Forms not available' ], 500 );
+    }
+
+    $form = \GFAPI::get_form( $form_id );
+
+    if ( ! $form || is_wp_error( $form ) ) {
+      return new \WP_REST_Response( [ 'error' => 'Form not found' ], 404 );
+    }
+
+    return new \WP_REST_Response( $form );
   }
 
   private function prepare_query_args( $params ) {
