@@ -70,12 +70,12 @@ class API_Settings {
     
     // Cache settings for 1 day
     $cache_key = 'nextpress_settings_' . get_current_blog_id();
-    $all_settings = wp_cache_get( $cache_key );
-    
+    $all_settings = $this->helpers->cache_get( $cache_key, 'nextpress_settings' );
+
     if ( false === $all_settings ) {
       try {
         $all_settings = apply_filters( "nextpress_settings", $this->load_options_without_transients() );
-        wp_cache_set( $cache_key, $all_settings, '', DAY_IN_SECONDS );
+        $this->helpers->cache_set( $cache_key, $all_settings, 'nextpress_settings', DAY_IN_SECONDS );
       } catch ( Exception $e ) {
         error_log( 'Nextpress settings error: ' . $e->getMessage() );
         return new \WP_Error( 'settings_error', 'Failed to load settings', array( 'status' => 500 ) );
@@ -135,12 +135,12 @@ class API_Settings {
     
     try {
       $cache_key = 'nextpress_acf_options_' . get_current_blog_id();
-      $options = wp_cache_get( $cache_key );
-      
+      $options = $this->helpers->cache_get( $cache_key, 'nextpress_settings' );
+
       if ( false === $options ) {
         $options = get_fields( 'options' );
         if ( $options ) {
-          wp_cache_set( $cache_key, $options, '', DAY_IN_SECONDS );
+          $this->helpers->cache_set( $cache_key, $options, 'nextpress_settings', DAY_IN_SECONDS );
         }
       }
       
@@ -216,12 +216,21 @@ class API_Settings {
 
 		// Flush wp cache.
 		$cache_key = 'nextpress_settings_' . get_current_blog_id();
-		wp_cache_delete( $cache_key );
+		$this->helpers->cache_delete( $cache_key, 'nextpress_settings' );
 
 		// Revalidate nextjs.
 		if ( $menu_slug === 'templates' ) {
 			$this->helpers->revalidate_fetch_route( 'before_content' );
 			$this->helpers->revalidate_fetch_route( 'after_content' );
+
+      // Revalidate language templates.
+      if ( function_exists( 'pll_languages_list' ) ) {
+        $languages = pll_languages_list();
+        foreach ( $languages as $lang ) {
+          $this->helpers->revalidate_fetch_route( "before_content_$lang" );
+			    $this->helpers->revalidate_fetch_route( "after_content_$lang" );
+        }
+      }
 		} else {
 			$this->helpers->revalidate_fetch_route( 'settings' );
 		}
