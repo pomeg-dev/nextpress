@@ -216,7 +216,9 @@ class API_Settings {
 
 		// Flush wp cache.
 		$cache_key = 'nextpress_settings_' . get_current_blog_id();
+    $acf_cache_key = 'nextpress_acf_options_' . get_current_blog_id();
 		$this->helpers->cache_delete( $cache_key, 'nextpress_settings' );
+		$this->helpers->cache_delete( $acf_cache_key, 'nextpress_settings' );
 
 		// Revalidate nextjs.
 		if ( $menu_slug === 'templates' ) {
