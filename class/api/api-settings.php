@@ -109,24 +109,43 @@ class API_Settings {
   }
 
   /**
-   * Load options without transients for better performance
+   * Load only a safe allowlist of WP core options for public exposure.
+   *
+   * SECURITY: Never replace this with a raw SELECT on wp_options — that leaks
+   * API keys, SMTP credentials, and secret keys to unauthenticated visitors.
+   * Add keys here only if they are safe to expose publicly.
+   * Use the 'nextpress_safe_option_keys' filter to extend from other plugins.
    */
   private function load_options_without_transients() {
-    global $wpdb;
-    
-    $query = "SELECT option_name, option_value FROM {$wpdb->options} 
-              WHERE (autoload = 'yes' OR autoload = 'on') 
-              AND option_name NOT LIKE '_transient_%' 
-              AND option_name NOT LIKE '_site_transient_%'
-              ORDER BY option_name";
-    
-    $results = $wpdb->get_results( $query );
-    $options = array();
-    
-    foreach ( $results as $row ) {
-      $options[ $row->option_name ] = maybe_unserialize( $row->option_value );
+    $safe_keys = apply_filters( 'nextpress_safe_option_keys', [
+      'blogname',
+      'blogdescription',
+      'siteurl',
+      'home',
+      'page_on_front',
+      'page_for_posts',
+      'posts_per_page',
+      'date_format',
+      'time_format',
+      'timezone_string',
+      'start_of_week',
+      'WPLANG',
+      'show_on_front',
+      'google_tag_manager_enabled', 
+      'google_tag_manager_id',
+      'page_for_posts_slug',
+      'frontend_url',
+      'before_content',
+      'after_content',
+      'page_404',
+      'favicon',
+    ] );
+
+    $options = [];
+    foreach ( $safe_keys as $key ) {
+      $options[ $key ] = get_option( $key );
     }
-    
+
     return $options;
   }
 

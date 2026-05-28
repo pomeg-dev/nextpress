@@ -293,12 +293,14 @@ class Post_Formatter {
   }
 
   private function include_author_name( $formatted_post ) {
-    $formatted_post['author'] = get_the_author_meta( "display_name", $formatted_post['id'] );
+    $user_id = get_post_field( 'post_author', $formatted_post['id'] );
+    $formatted_post['author'] = get_the_author_meta( 'display_name', $user_id );
     return $formatted_post;
   }
 
   private function include_is_homepage( $formatted_post ) {
-    $formatted_post['is_homepage'] = is_home() || is_front_page();
+    $front_page_id = (int) get_option( 'page_on_front' );
+    $formatted_post['is_homepage'] = $front_page_id > 0 && (int) $formatted_post['id'] === $front_page_id;
     return $formatted_post;
   }
 

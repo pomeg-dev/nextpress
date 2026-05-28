@@ -215,8 +215,19 @@ class Ext_ACF {
         return false;
       }
 
-      // Suppress warnings and parse SVG
-      $xml = @simplexml_load_file( $object['guid']['raw'] );
+      // Fetch SVG content via WP HTTP API (avoids SSRF/XXE from simplexml_load_file).
+      $response = wp_remote_get( $object['guid']['raw'], [ 'timeout' => 5 ] );
+      if ( is_wp_error( $response ) ) {
+        return false;
+      }
+      $svg_body = wp_remote_retrieve_body( $response );
+
+      // Disable XXE before parsing.
+      $previous = libxml_use_internal_errors( true );
+      libxml_disable_entity_loader( true );
+      $xml = simplexml_load_string( $svg_body );
+      libxml_use_internal_errors( $previous );
+
       if ( $xml !== false ) {
         $attrs = $xml->attributes();
         $viewbox = explode( ' ', $attrs->viewBox );

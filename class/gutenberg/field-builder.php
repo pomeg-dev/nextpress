@@ -261,7 +261,7 @@ class Field_Builder {
   private function get_gravity_forms() {
     if ( ! class_exists( 'GFAPI' ) ) {
       // No Gravity Form API class available. The plugin probably isn't active.
-      return $field;
+      return [];
     }
 
     $forms = \GFAPI::get_forms( true );

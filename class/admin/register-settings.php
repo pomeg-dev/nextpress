@@ -32,8 +32,8 @@ class Register_Settings {
    * Register general settings
    */
   public function register_general_settings() {
-    // Allow additional of extra tabs/settings via filter.
-    apply_filters( 'nextpress_general_settings', $this->settings );
+    // Allow addition of extra tabs/settings via filter.
+    $this->settings = apply_filters( 'nextpress_general_settings', $this->settings );
 
     // ACF register.
     acf_add_local_field_group( $this->settings->build() );

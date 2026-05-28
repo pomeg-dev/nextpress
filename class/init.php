@@ -196,7 +196,7 @@ class Init {
 	 * Clear caches
 	 */
 	public function clear_wp_cache() {
-		if ( isset( $_GET['clear'] ) ) {
+		if ( isset( $_GET['clear'] ) && current_user_can( 'manage_options' ) ) {
 			wp_cache_flush();
 			global $wpdb;
 			$wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '%_transient_%'");

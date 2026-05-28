@@ -354,7 +354,7 @@ class User_Flow {
     $user_id = wp_create_user($username, $password, $email);
     if (is_wp_error($user_id)) {
       return new \WP_REST_Response([
-        'message' => $user->get_error_message(),
+        'message' => $user_id->get_error_message(),
         'success' => false,
       ]);
     }
