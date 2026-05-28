@@ -37,8 +37,33 @@ class Register_Blocks {
     // Register blocks.
     add_action( 'wp_loaded', [ $this, 'register_nextpress_blocks' ] );
 
+    // Enqueue block preview assets for the editor.
+    add_action( 'enqueue_block_assets', [ $this, 'enqueue_block_preview_assets' ] );
+
     // Disable editing if no blocks found.
     add_action( 'init', [ $this, 'disable_editing_if_no_blocks' ] );
+  }
+
+  /**
+   * Enqueue block preview JS and CSS for the editor.
+   */
+  public function enqueue_block_preview_assets() {
+    if ( ! is_admin() ) {
+      return;
+    }
+    wp_enqueue_script(
+      'nextpress-block-preview',
+      NEXTPRESS_URI . '/assets/js/block-preview.js',
+      [],
+      filemtime( NEXTPRESS_PATH . '/assets/js/block-preview.js' ),
+      true
+    );
+    wp_enqueue_style(
+      'nextpress-block-preview',
+      NEXTPRESS_URI . '/assets/css/block-preview.css',
+      [],
+      filemtime( NEXTPRESS_PATH . '/assets/css/block-preview.css' )
+    );
   }
 
   /**
@@ -237,33 +262,15 @@ class Register_Blocks {
     echo "<div id='loading_{$iframe_id}' class='nextpress-loading' style='display: flex; align-items: center; justify-content: center; height: 100px; background: #f0f0f1; border: 1px dashed #ccc;'>";
     echo "<span>Loading preview...</span>";
     echo "</div>";
-    // echo "<div>{$block_html}</div>";
     echo "<iframe id='{$iframe_id}' style='display: none; pointer-events: none; min-height: 80px; width: 100%; border: none;' data-content-hash='{$content_hash}' data-frontend-url='{$frontend_url}' data-post-id='{$post_id}' data-encoded-content='{$encoded_content}' data-initialized='false'></iframe>";
     echo "</div>";
 
-    // Enqueue block preview assets (WordPress deduplicates automatically).
-    wp_enqueue_script(
-      'nextpress-block-preview',
-      NEXTPRESS_URI . '/assets/js/block-preview.js',
-      [],
-      filemtime( NEXTPRESS_PATH . '/assets/js/block-preview.js' ),
-      true
-    );
-    wp_enqueue_style(
-      'nextpress-block-preview',
-      NEXTPRESS_URI . '/assets/css/block-preview.css',
-      [],
-      filemtime( NEXTPRESS_PATH . '/assets/css/block-preview.css' )
-    );
-
-    // Register this specific block instance.
-    wp_add_inline_script(
-      'nextpress-block-preview',
-      '(function() {' .
-        'var iframeId = ' . wp_json_encode( $iframe_id ) . ';' .
-        'if (window.NextPressBlockManager) { window.NextPressBlockManager.register(iframeId); }' .
-      '})();'
-    );
+    // Register this specific block instance (script is enqueued globally via enqueue_block_assets).
+    echo '<script>(function() {' .
+      'var iframeId = ' . wp_json_encode( $iframe_id ) . ';' .
+      'if (window.NextPressBlockManager) { window.NextPressBlockManager.register(iframeId); }' .
+      ' else { document.addEventListener("DOMContentLoaded", function() { if (window.NextPressBlockManager) window.NextPressBlockManager.register(iframeId); }); }' .
+    '})();</script>';
 
     $block_template = [
       [
