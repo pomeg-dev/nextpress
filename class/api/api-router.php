@@ -63,38 +63,11 @@ class API_Router {
     if ( $post_id && ! $path ) {
       $cache_key = 'nextpress_router_' . md5( $post_id . '_' . ( $include_content ? '1' : '0' ) );
     }
-    $mutex_key = $cache_key . '_lock';
 
-    // Check cache first
+    // Check cache first (Redis-aware).
     $cached = $this->helpers->cache_get( $cache_key, 'nextpress_router' );
     if ( $cached !== false ) {
       return $cached;
-    }
-
-    // Mutex lock to prevent stampede
-    $lock_acquired = false;
-    $wait_count = 0;
-    while ( ! $lock_acquired && $wait_count < 10 ) {
-      // Try to acquire lock (only succeeds if key doesn't exist)
-      if ( wp_using_ext_object_cache() ) {
-        $lock_acquired = wp_cache_add( $mutex_key, 1, 'nextpress_router', 30 );
-      } else {
-        // Transient-based locking for fallback
-        $lock_acquired = ( get_transient( 'nextpress_router_' . $mutex_key ) === false );
-        if ( $lock_acquired ) {
-          set_transient( 'nextpress_router_' . $mutex_key, 1, 30 );
-        }
-      }
-
-      if ( ! $lock_acquired ) {
-        usleep( 500000 ); // Wait 500ms
-        $wait_count++;
-        // Check if cache appeared while waiting
-        $cached = $this->helpers->cache_get( $cache_key, 'nextpress_router' );
-        if ( $cached !== false ) {
-          return $cached;
-        }
-      }
     }
 
     $page_for_posts_id = get_option( 'page_for_posts' );
@@ -145,9 +118,6 @@ class API_Router {
     $cache_ttl = apply_filters( 'nextpress_router_cache_ttl', HOUR_IN_SECONDS );
     $this->helpers->cache_set( $cache_key, $formatted_post, 'nextpress_router', $cache_ttl );
 
-    // Release mutex lock
-    $this->helpers->cache_delete( $mutex_key, 'nextpress_router' );
-
     return $formatted_post;
   }
 
@@ -155,16 +125,9 @@ class API_Router {
    * Invalidate router cache for current post.
    */
   public function invalidate_old_url( $post_id ) {
-     // Early returns.
-    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
-      return;
-    }
-    if ( wp_is_post_revision( $post_id ) ) {
-      return;
-    }
+    if ( $this->helpers->should_skip_save( $post_id ) ) return;
 
     $post = get_post( $post_id );
-    if ( ! $post ) return;
     if ( $post->post_type === "nav_menu_item" ) return;
 
     $post_path = str_replace( home_url(), '', get_permalink( $post ) );
@@ -176,16 +139,9 @@ class API_Router {
    * Selectively invalidate router cache when posts are updated
    */
   public function invalidate_router_cache( $post_id ) {
-    // Early returns.
-    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
-      return;
-    }
-    if ( wp_is_post_revision( $post_id ) ) {
-      return;
-    }
+    if ( $this->helpers->should_skip_save( $post_id ) ) return;
 
     $post = get_post( $post_id );
-    if ( ! $post ) return;
     if ( $post->post_type === "nav_menu_item" ) return;
 
     // CRITICAL FIX: Clear cache group to invalidate all router cache

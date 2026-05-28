@@ -71,15 +71,6 @@ class API_Posts {
       ]
     );
 
-    register_rest_route(
-      'nextpress',
-      '/form/(?P<form_id>[0-9]+)',
-      [
-        'methods' => 'GET',
-        'callback' => [ $this, 'get_form' ],
-        'permission_callback' => '__return_true',
-      ]
-    );
   }
 
   public function get_posts( $request ) {
@@ -102,11 +93,10 @@ class API_Posts {
     $args = $this->prepare_query_args( $params );
     $is_slug_only = isset( $params['slug_only'] ) && $params['slug_only'];
 
-    // CRITICAL FIX: Cache stampede protection (Redis-aware)
+    // Cache stampede protection (Redis-aware).
     $cache_key = $this->generate_cache_key( 'nextpress_posts', $args );
-    $mutex_key = $cache_key . '_lock';
 
-    // Check cache first (uses Redis when available)
+    // Check cache first (uses Redis when available).
     $cached = $this->helpers->cache_get( $cache_key, 'nextpress_posts' );
     if ( $cached !== false ) {
       $response = new \WP_REST_Response( $cached['posts'] );
@@ -114,36 +104,6 @@ class API_Posts {
       $response->header( 'X-WP-TotalPages', $cached['pages'] );
       $response->header( 'X-Cache', 'HIT' );
       return $response;
-    }
-
-    // Mutex lock to prevent stampede
-    $lock_acquired = false;
-    $wait_count = 0;
-    while ( ! $lock_acquired && $wait_count < 10 ) {
-      // Try to acquire lock (only succeeds if key doesn't exist)
-      if ( wp_using_ext_object_cache() ) {
-        $lock_acquired = wp_cache_add( $mutex_key, 1, 'nextpress_posts', 30 );
-      } else {
-        // Transient-based locking for fallback
-        $lock_acquired = ( get_transient( 'nextpress_posts_' . $mutex_key ) === false );
-        if ( $lock_acquired ) {
-          set_transient( 'nextpress_posts_' . $mutex_key, 1, 30 );
-        }
-      }
-
-      if ( ! $lock_acquired ) {
-        usleep( 500000 ); // Wait 500ms
-        $wait_count++;
-        // Check if cache appeared while waiting
-        $cached = $this->helpers->cache_get( $cache_key, 'nextpress_posts' );
-        if ( $cached !== false ) {
-          $response = new \WP_REST_Response( $cached['posts'] );
-          $response->header( 'X-WP-Total', $cached['total'] );
-          $response->header( 'X-WP-TotalPages', $cached['pages'] );
-          $response->header( 'X-Cache', 'HIT-WAIT' );
-          return $response;
-        }
-      }
     }
 
     // Optimize slug_only queries - no need for post objects
@@ -212,9 +172,6 @@ class API_Posts {
       'pages' => $total_pages
     ], 'nextpress_posts', $cache_ttl );
 
-    // Release mutex lock
-    $this->helpers->cache_delete( $mutex_key, 'nextpress_posts' );
-
     $response = new \WP_REST_Response( $formatted_posts );
     $response->header( 'X-WP-Total', $total );
     $response->header( 'X-WP-TotalPages', $total_pages );
@@ -259,22 +216,6 @@ class API_Posts {
       return $response;
     }
     return new \WP_REST_Response( [] );
-  }
-
-  public function get_form( $request ) {
-    $form_id = (int) $request->get_param( 'form_id' );
-
-    if ( ! class_exists( 'GFAPI' ) ) {
-      return new \WP_REST_Response( [ 'error' => 'Gravity Forms not available' ], 500 );
-    }
-
-    $form = \GFAPI::get_form( $form_id );
-
-    if ( ! $form || is_wp_error( $form ) ) {
-      return new \WP_REST_Response( [ 'error' => 'Form not found' ], 404 );
-    }
-
-    return new \WP_REST_Response( $form );
   }
 
   private function prepare_query_args( $params ) {
@@ -427,17 +368,9 @@ class API_Posts {
    * Selectively invalidate posts cache when posts are updated
    */
   public function invalidate_posts_cache( $post_id ) {
-    // Early returns.
-    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
-      return;
-    }
-    if ( wp_is_post_revision( $post_id ) ) {
-      return;
-    }
+    if ( $this->helpers->should_skip_save( $post_id ) ) return;
 
     $post = get_post( $post_id );
-    if ( ! $post ) return;
-
     $post_type = $post->post_type;
     if ( $post_type === "nav_menu_item" ) return;
 

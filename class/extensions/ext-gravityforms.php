@@ -13,6 +13,35 @@ class Ext_GravityForms {
   public function __construct() {
     add_filter( 'nextpress_block_data', [ $this, 'include_gf_data' ], 10, 2 );
     add_filter( 'nextpress_post_object', [ $this, 'include_gf_post_data' ], 10, 1 );
+    add_action( 'rest_api_init', [ $this, 'register_routes' ] );
+  }
+
+  public function register_routes() {
+    register_rest_route(
+      'nextpress',
+      '/form/(?P<form_id>[0-9]+)',
+      [
+        'methods'             => 'GET',
+        'callback'            => [ $this, 'get_form' ],
+        'permission_callback' => '__return_true',
+      ]
+    );
+  }
+
+  public function get_form( $request ) {
+    $form_id = (int) $request->get_param( 'form_id' );
+
+    if ( ! class_exists( 'GFAPI' ) ) {
+      return new \WP_REST_Response( [ 'error' => 'Gravity Forms not available' ], 500 );
+    }
+
+    $form = \GFAPI::get_form( $form_id );
+
+    if ( ! $form || is_wp_error( $form ) ) {
+      return new \WP_REST_Response( [ 'error' => 'Form not found' ], 404 );
+    }
+
+    return new \WP_REST_Response( $form );
   }
 
   public function include_gf_data( $block_data ) {

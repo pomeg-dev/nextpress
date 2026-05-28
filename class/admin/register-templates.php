@@ -30,22 +30,14 @@ class Register_Templates {
   public function __construct( $helpers ) {
     $this->helpers = $helpers;
     $this->field_builder = new Field_Builder();
-    add_action( 'wp_loaded', [ $this, 'set_templates' ] );
-    add_action( 'wp_loaded', [ $this, 'register_templates' ] );
+    add_action( 'wp_loaded', [ $this, 'setup_templates' ] );
   }
 
   /**
-   * Set templates in class property.
+   * Build and register ACF templates in a single hook to guarantee order.
    */
-  public function set_templates() {
+  public function setup_templates() {
     $this->templates = $this->build_templates();
-  }
-
-  /**
-   * Register general settings
-   */
-  public function register_templates() {
-    // ACF register.
     if ( function_exists( 'acf_add_local_field_group' ) ) {
       acf_add_local_field_group( $this->templates->build() );
     }

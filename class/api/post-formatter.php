@@ -15,6 +15,10 @@ class Post_Formatter {
    * Main formatter function
    */
   public function format_post( $post, $include_content = false, $include_metadata = true ) {
+    // Fetch shared data once — avoids repeated DB queries across private methods.
+    $categories    = wp_get_post_categories( $post->ID, [ 'fields' => 'all' ] );
+    $thumbnail_id  = get_post_thumbnail_id( $post->ID );
+
     $formatted_post = [
       'id' => $post->ID,
       'slug' => $this->get_slug( $post ),
@@ -23,26 +27,26 @@ class Post_Formatter {
       'date' => $post->post_date,
       'title' => $post->post_title,
       'excerpt' => $post->post_excerpt,
-      'image' => $this->get_post_image( $post ),
-      'categories' => $this->get_post_categories( $post ),
+      'image' => $this->get_post_image( $thumbnail_id ),
+      'categories' => $this->format_categories( $categories ),
       'tags' => $this->get_post_tags( $post ),
       'password' => $post->post_password,
     ];
 
     if ( $include_content ) {
-      $template = $this->get_template_content( $post );
+      $template = $this->get_template_content( $post, $categories );
       $formatted_post['template'] = $template;
       $formatted_post['content'] = $this->parse_block_data( $post->post_content );
     }
 
-    $formatted_post = $this->include_featured_image( $formatted_post );
-    $formatted_post = $this->include_author_name( $formatted_post );
+    $formatted_post = $this->include_featured_image( $formatted_post, $thumbnail_id );
+    $formatted_post = $this->include_author_name( $formatted_post, $post );
     $formatted_post = $this->include_is_homepage( $formatted_post );
-    $formatted_post = $this->include_category_names( $formatted_post );
-    $formatted_post = $this->include_tax_terms($formatted_post);
-    $formatted_post = $this->include_post_path( $formatted_post );
-    $formatted_post = $this->include_breadcrumbs( $formatted_post );
-    $formatted_post = $this->return_post_revision_for_preview( $formatted_post );
+    $formatted_post = $this->include_category_names( $formatted_post, $categories );
+    $formatted_post = $this->include_tax_terms( $formatted_post );
+    $formatted_post = $this->include_post_path( $formatted_post, $post );
+    $formatted_post = $this->include_breadcrumbs( $formatted_post, $post );
+    $formatted_post = $this->return_post_revision_for_preview( $formatted_post, $post );
 
     // Polylang support.
     if ( function_exists( 'pll_get_post_language' ) ) {
@@ -91,26 +95,21 @@ class Post_Formatter {
     ];
   }
 
-  private function get_post_image( $post ) {
-    $image_id = get_post_thumbnail_id( $post->ID );
-    if ( ! $image_id ) {
+  private function get_post_image( $thumbnail_id ) {
+    if ( ! $thumbnail_id ) {
       return null;
     }
 
     return [
-      'full' => wp_get_attachment_image_url($image_id, 'full'),
-      'thumbnail' => wp_get_attachment_image_url($image_id, 'thumbnail'),
+      'full'      => wp_get_attachment_image_url( $thumbnail_id, 'full' ),
+      'thumbnail' => wp_get_attachment_image_url( $thumbnail_id, 'thumbnail' ),
     ];
   }
 
-  private function get_post_categories( $post ) {
-    $categories = wp_get_post_categories(
-      $post->ID,
-      [ 'fields' => 'all' ]
-    );
+  private function format_categories( $categories ) {
     return array_map( function ( $category ) {
       return [
-        'id' => $category->term_id,
+        'id'   => $category->term_id,
         'name' => $category->name,
         'slug' => $category->slug,
       ];
@@ -128,9 +127,9 @@ class Post_Formatter {
     }, $tags );
   }
 
-  private function get_template_content( $post ) {
+  private function get_template_content( $post, $categories ) {
     $post_type = get_post_type( $post );
-    $post_categories = wp_get_post_categories( $post->ID, ['fields' => 'names'] );
+    $post_categories = wp_list_pluck( $categories, 'name' );
 
     // Try to get post type specific templates
     $templates = get_field( "{$post_type}_content_templates", 'option' );
@@ -154,7 +153,6 @@ class Post_Formatter {
             'after_content' => $this->format_flexible_content( $template['after_content'] ),
             'sidebar_content' => $this->format_flexible_content( $template['sidebar_content'] ),
           ];
-          break;
         }
       }
 
@@ -279,22 +277,21 @@ class Post_Formatter {
     return $formatted_blocks;
   }
 
-  private function include_featured_image( $formatted_post ) {
+  private function include_featured_image( $formatted_post, $thumbnail_id ) {
     $formatted_post['featured_image'] = [
-      'url' => get_the_post_thumbnail_url($formatted_post['id']),
+      'url'   => $thumbnail_id ? wp_get_attachment_image_url( $thumbnail_id, 'full' ) : false,
       'sizes' => [
-        'thumbnail' => get_the_post_thumbnail_url( $formatted_post['id'], 'thumbnail' ),
-        'medium' => get_the_post_thumbnail_url( $formatted_post['id'], 'medium' ),
-        'large' => get_the_post_thumbnail_url( $formatted_post['id'], 'large' ),
-        'full' => get_the_post_thumbnail_url( $formatted_post['id'], 'full' ),
+        'thumbnail' => $thumbnail_id ? wp_get_attachment_image_url( $thumbnail_id, 'thumbnail' ) : false,
+        'medium'    => $thumbnail_id ? wp_get_attachment_image_url( $thumbnail_id, 'medium' ) : false,
+        'large'     => $thumbnail_id ? wp_get_attachment_image_url( $thumbnail_id, 'large' ) : false,
+        'full'      => $thumbnail_id ? wp_get_attachment_image_url( $thumbnail_id, 'full' ) : false,
       ],
     ];
     return $formatted_post;
   }
 
-  private function include_author_name( $formatted_post ) {
-    $user_id = get_post_field( 'post_author', $formatted_post['id'] );
-    $formatted_post['author'] = get_the_author_meta( 'display_name', $user_id );
+  private function include_author_name( $formatted_post, $post ) {
+    $formatted_post['author'] = get_the_author_meta( 'display_name', $post->post_author );
     return $formatted_post;
   }
 
@@ -304,8 +301,8 @@ class Post_Formatter {
     return $formatted_post;
   }
 
-  private function include_category_names( $formatted_post ) {
-    $formatted_post['category_names'] = wp_get_post_categories( $formatted_post['id'], [ 'fields' => 'names' ] );
+  private function include_category_names( $formatted_post, $categories ) {
+    $formatted_post['category_names'] = wp_list_pluck( $categories, 'name' );
     return $formatted_post;
   }
 
@@ -330,9 +327,8 @@ class Post_Formatter {
     return $formatted_post;
   }
 
-  private function include_post_path( $formatted_post ) {
+  private function include_post_path( $formatted_post, $post ) {
     $base_url = site_url();
-    $post = get_post( $formatted_post['id'] );
 
     if ( in_array( $post->post_status, ['draft', 'pending', 'auto-draft', 'future', 'private'] ) ) {
       $my_post = clone $post;
@@ -352,30 +348,29 @@ class Post_Formatter {
     return $formatted_post;
   }
 
-  private function include_breadcrumbs( $formatted_post ) {
-    $post = get_post( $formatted_post['id'] );
+  private function include_breadcrumbs( $formatted_post, $post ) {
     $breadcrumbs = '<nav class="breadcrumbs">';
     $breadcrumbs .= '<a class="home" href="' . home_url() . '">Home</a>';
 
     if ( $post->post_type === 'post' ) {
       $page_for_posts = get_option( 'page_for_posts' );
 
-      $breadcrumbs .= '<span class="separator"> | </span><a class="type-archive" href="' . get_post_type_archive_link( $post->post_type ) . '">' . get_the_title( $page_for_posts ) . '</a>';
+      $breadcrumbs .= '<span class="separator"> | </span><a class="type-archive" href="' . esc_url( get_post_type_archive_link( $post->post_type ) ) . '">' . esc_html( get_the_title( $page_for_posts ) ) . '</a>';
 
-      $breadcrumbs .= '<span class="separator"> | </span><span class="current">' . get_the_title( $post ) . '</span>';
+      $breadcrumbs .= '<span class="separator"> | </span><span class="current">' . esc_html( get_the_title( $post ) ) . '</span>';
     } elseif ( $post->post_type === 'page' ) {
       if ( $post->post_parent ) {
         $parent_id = $post->post_parent;
         $parent_links = [];
         while ( $parent_id ) {
             $page = get_post( $parent_id );
-            $parent_links[] = '<a class="parent" href="' . get_permalink( $page->ID ) . '">' . get_the_title( $page->ID ) . '</a>';
+            $parent_links[] = '<a class="parent" href="' . esc_url( get_permalink( $page->ID ) ) . '">' . esc_html( get_the_title( $page->ID ) ) . '</a>';
             $parent_id = $page->post_parent;
         }
         $parent_links = array_reverse( $parent_links );
         $breadcrumbs .= '<span class="separator"> | </span>' . implode( '<span class="separator"> | </span>', $parent_links );
       }
-      $breadcrumbs .= '<span class="separator"> | </span><span class="current">' . get_the_title( $post ) . '</span>';
+      $breadcrumbs .= '<span class="separator"> | </span><span class="current">' . esc_html( get_the_title( $post ) ) . '</span>';
     }
     $breadcrumbs .= '</nav>';
 
@@ -383,8 +378,7 @@ class Post_Formatter {
     return apply_filters( 'nextpress_breadcrumbs', $formatted_post );
   }
 
-  private function return_post_revision_for_preview( $formatted_post ) {
-    $post = get_post( $formatted_post['id'] );
+  private function return_post_revision_for_preview( $formatted_post, $post ) {
     if ( $post->post_type == "revision" ) {
       $parent_post = get_post( $post->post_parent );
       $revisions = wp_get_post_revisions( $parent_post->ID );

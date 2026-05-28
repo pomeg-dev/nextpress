@@ -64,10 +64,6 @@ class API_Settings {
       switch_to_blog( get_current_blog_id() );
     }
 
-    if ( isset( $data['keys'] ) && ! empty( $data['keys'] ) ) {
-      $requested_keys = array_map( 'trim', explode( ',', $data['keys'] ) );
-    }
-    
     // Cache settings for 1 day
     $cache_key = 'nextpress_settings_' . get_current_blog_id();
     $all_settings = $this->helpers->cache_get( $cache_key, 'nextpress_settings' );
@@ -261,16 +257,9 @@ class API_Settings {
 	 * Revalidate menu settings
 	 */
 	public function revalidate_menu_settings( $post_id ) {
-		// Early returns.
-    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
-      return;
-    }
-    if ( wp_is_post_revision( $post_id ) ) {
-      return;
-    }
+    if ( $this->helpers->should_skip_save( $post_id ) ) return;
 
     $post = get_post( $post_id );
-    if ( ! $post ) return;
     if ( $post->post_type !== "nav_menu_item" ) return;
 
     $this->helpers->revalidate_fetch_route( 'before_content' );

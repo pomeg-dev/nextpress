@@ -22,14 +22,26 @@ class Helpers {
   public $blocks_url;
 
   /**
+   * Cache service.
+   */
+  public $cache;
+
+  /**
    * Polylang
    */
   public $languages = [];
   public $default_language = '';
 
   public function __construct() {
+    $this->cache = new Cache();
     // Setup languages using Polylang.
     add_action( 'init', [ $this, 'init_polylang' ] );
+
+    // Clear caches if GET param set.
+    add_action( 'init', [ $this, 'clear_wp_cache' ] );
+
+    // Database query monitoring for performance debugging.
+    add_action( 'init', [ $this, 'maybe_enable_query_monitoring' ] );
   }
 
   /**
@@ -37,16 +49,20 @@ class Helpers {
    */
   private function get_docker_url( $return_local = false ) {
     if ( $return_local ) return 'http://localhost:3000';
- 
-    // Test if host.docker.internal actually works
+
+    $cached = $this->cache_get( 'docker_url', 'nextpress' );
+    if ( $cached !== false ) {
+      return $cached;
+    }
+
+    // Test if host.docker.internal actually works (cached for 60s to avoid blocking every request).
     $test_url = 'http://host.docker.internal:3000';
     $response = wp_remote_get( $test_url, [ 'timeout' => 2 ] );
-    
-    if ( ! is_wp_error( $response ) ) {
-      return 'http://host.docker.internal:3000';
-    }
-    
-    return 'http://localhost:3000'; // Final fallback
+    $url = ! is_wp_error( $response ) ? 'http://host.docker.internal:3000' : 'http://localhost:3000';
+
+    $this->cache_set( 'docker_url', $url, 'nextpress', 60 );
+
+    return $url;
   }
 
   /**
@@ -114,11 +130,10 @@ class Helpers {
       $cache_key = 'next_blocks_' . md5( $cache_key );
     }
     
-    $blocks_cache = get_transient( $cache_key );
+    $blocks_cache = $this->cache_get( $cache_key, 'nextpress_blocks' );
 
     if ( $blocks_cache && ! empty( $blocks_cache ) ) {
-      $data = maybe_unserialize( $blocks_cache );
-      return $data;
+      return $blocks_cache;
     } else {
       $blocks_url = $this->get_blocks_url();
 
@@ -143,10 +158,10 @@ class Helpers {
       $url_hash = md5( $blocks_url );
       $rate_limit_key = 'blocks_api_requests';
       $circuit_breaker_key = 'blocks_api_circuit_breaker_' . $url_hash;
-      $current_requests = get_transient( $rate_limit_key ) ?: 0;
-      
+      $current_requests = $this->cache_get( $rate_limit_key, 'nextpress_blocks' ) ?: 0;
+
       // Check if circuit breaker is active (after too many failures)
-      if ( get_transient( $circuit_breaker_key ) ) {
+      if ( $this->cache_get( $circuit_breaker_key, 'nextpress_blocks' ) ) {
         error_log( 'API requests blocked by circuit breaker' );
         return;
       }
@@ -167,51 +182,23 @@ class Helpers {
       );
 
       // Increment request counter
-      $this->set_transient_no_autoload( $rate_limit_key, $current_requests + 1, 30 );
+      $this->cache_set( $rate_limit_key, $current_requests + 1, 'nextpress_blocks', 30 );
   
       if ( is_wp_error( $response ) ) {
         error_log( 'API request failed: ' . $response->get_error_message() );
-        
-        // Circuit breaker: Track consecutive failures
-        $failure_count_key = 'blocks_api_failures_' . $url_hash;
-        $failure_count = get_transient( $failure_count_key ) ?: 0;
-        $failure_count++;
-        
-        // After 3 consecutive failures, activate circuit breaker for 5 minutes
-        if ( $failure_count >= 3 ) {
-          $this->set_transient_no_autoload( $circuit_breaker_key, true, 300 ); // 5 minutes
-          delete_transient( $failure_count_key );
-          error_log( 'Circuit breaker activated due to repeated API failures' );
-        } else {
-          $this->set_transient_no_autoload( $failure_count_key, $failure_count, 300 );
-        }
-        
+        $this->handle_api_failure( $url_hash, $circuit_breaker_key );
         return false;
       }
-  
+
       $response_code = wp_remote_retrieve_response_code( $response );
       if ( $response_code !== 200 ) {
         error_log( 'API request failed with response code: ' . $response_code );
-        
-        // Circuit breaker: Track consecutive failures
-        $failure_count_key = 'blocks_api_failures_' . $url_hash;
-        $failure_count = get_transient( $failure_count_key ) ?: 0;
-        $failure_count++;
-        
-        // After 3 consecutive failures, activate circuit breaker for 5 minutes
-        if ( $failure_count >= 3 ) {
-          $this->set_transient_no_autoload( $circuit_breaker_key, true, 300 ); // 5 minutes
-          delete_transient( $failure_count_key );
-          error_log( 'Circuit breaker activated due to repeated API failures' );
-        } else {
-          $this->set_transient_no_autoload( $failure_count_key, $failure_count, 300 );
-        }
-        
+        $this->handle_api_failure( $url_hash, $circuit_breaker_key );
         return false;
       }
       
       // Reset failure count on successful request
-      delete_transient( 'blocks_api_failures_' . $url_hash );
+      $this->cache_delete( 'blocks_api_failures_' . $url_hash, 'nextpress_blocks' );
   
       $body = wp_remote_retrieve_body( $response );
       $data = json_decode( $body, true );
@@ -224,127 +211,50 @@ class Helpers {
       // CRITICAL FIX: Set proper cache expiration (was missing, causing no caching!)
       // Cache blocks for 12 hours - they rarely change
       $cache_ttl = apply_filters( 'nextpress_blocks_cache_ttl', 12 * HOUR_IN_SECONDS );
-      $this->set_transient_no_autoload( $cache_key, $data, $cache_ttl );
+      $this->cache_set( $cache_key, $data, 'nextpress_blocks', $cache_ttl );
       return $data;
     }
   }
 
   /**
-   * CRITICAL FIX: Set transient with autoload='no' to prevent options table bloat
-   *
-   * WordPress set_transient() creates options with autoload='yes' by default when
-   * no object cache is available. This causes massive performance issues as ALL
-   * autoloaded options are loaded on EVERY request.
-   *
-   * @param string $transient Transient name (without _transient_ prefix)
-   * @param mixed $value Transient value
-   * @param int $expiration Time until expiration in seconds
-   * @return bool True on success, false on failure
+   * Track consecutive API failures and activate circuit breaker after threshold.
+   */
+  private function handle_api_failure( $url_hash, $circuit_breaker_key ) {
+    $failure_count_key = 'blocks_api_failures_' . $url_hash;
+    $failure_count = $this->cache_get( $failure_count_key, 'nextpress_blocks' ) ?: 0;
+    $failure_count++;
+
+    if ( $failure_count >= 3 ) {
+      $this->cache_set( $circuit_breaker_key, true, 'nextpress_blocks', 300 );
+      $this->cache_delete( $failure_count_key, 'nextpress_blocks' );
+      error_log( 'Circuit breaker activated due to repeated API failures' );
+    } else {
+      $this->cache_set( $failure_count_key, $failure_count, 'nextpress_blocks', 300 );
+    }
+  }
+
+  /**
+   * Delegation wrappers — all cache logic lives in the Cache class.
+   * These preserve the existing $helpers->cache_*() call signatures.
    */
   public function set_transient_no_autoload( $transient, $value, $expiration = 0 ) {
-    global $wpdb;
-
-    // First, set the transient normally
-    $result = set_transient( $transient, $value, $expiration );
-
-    // Then, ensure autoload is set to 'no' for both the transient and its timeout
-    // This prevents these from being loaded on every page request
-    $option_names = [
-      '_transient_' . $transient,
-      '_transient_timeout_' . $transient
-    ];
-
-    foreach ( $option_names as $option_name ) {
-      $wpdb->query(
-        $wpdb->prepare(
-          "UPDATE {$wpdb->options} SET autoload = 'no' WHERE option_name = %s",
-          $option_name
-        )
-      );
-    }
-
-    return $result;
+    return $this->cache->set_transient_no_autoload( $transient, $value, $expiration );
   }
 
-  /**
-   * REDIS-AWARE CACHE: Set cache value using Redis if available, fallback to transient
-   *
-   * This method provides a unified caching interface that:
-   * - Uses wp_cache_set() when Redis/object cache is available (optimal performance)
-   * - Falls back to set_transient_no_autoload() when no object cache (prevents autoload bloat)
-   *
-   * @param string $key Cache key
-   * @param mixed $value Value to cache
-   * @param string $group Cache group (used for wp_cache, prepended to transient key)
-   * @param int $expiration Time until expiration in seconds
-   * @return bool True on success, false on failure
-   */
   public function cache_set( $key, $value, $group = '', $expiration = 0 ) {
-    // Prefer object cache (Redis) when available - this is the optimal path
-    if ( wp_using_ext_object_cache() ) {
-      return wp_cache_set( $key, $value, $group, $expiration );
-    }
-
-    // Fall back to transient with autoload='no' to prevent database bloat
-    $transient_key = $group ? $group . '_' . $key : $key;
-    return $this->set_transient_no_autoload( $transient_key, $value, $expiration );
+    return $this->cache->set( $key, $value, $group, $expiration );
   }
 
-  /**
-   * REDIS-AWARE CACHE: Get cache value using Redis if available, fallback to transient
-   *
-   * @param string $key Cache key
-   * @param string $group Cache group (used for wp_cache, prepended to transient key)
-   * @return mixed|false Cached value or false if not found
-   */
   public function cache_get( $key, $group = '' ) {
-    if ( wp_using_ext_object_cache() ) {
-      return wp_cache_get( $key, $group );
-    }
-
-    $transient_key = $group ? $group . '_' . $key : $key;
-    return get_transient( $transient_key );
+    return $this->cache->get( $key, $group );
   }
 
-  /**
-   * REDIS-AWARE CACHE: Delete cache value
-   *
-   * @param string $key Cache key
-   * @param string $group Cache group
-   * @return bool True on success, false on failure
-   */
   public function cache_delete( $key, $group = '' ) {
-    if ( wp_using_ext_object_cache() ) {
-      return wp_cache_delete( $key, $group );
-    }
-
-    $transient_key = $group ? $group . '_' . $key : $key;
-    return delete_transient( $transient_key );
+    return $this->cache->delete( $key, $group );
   }
 
-  /**
-   * REDIS-AWARE CACHE: Flush entire cache group
-   *
-   * @param string $group Cache group to flush
-   * @return bool True on success
-   */
   public function cache_flush_group( $group ) {
-    if ( wp_using_ext_object_cache() ) {
-      return wp_cache_flush_group( $group );
-    }
-
-    // Without object cache, we need to manually delete matching transients
-    // This is slower but necessary for the fallback path
-    global $wpdb;
-    $pattern = $group . '_%';
-    $wpdb->query(
-      $wpdb->prepare(
-        "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s OR option_name LIKE %s",
-        '_transient_' . $pattern,
-        '_transient_timeout_' . $pattern
-      )
-    );
-    return true;
+    return $this->cache->flush_group( $group );
   }
 
   /**
@@ -352,7 +262,7 @@ class Helpers {
    */
   public function revalidate_fetch_route( $tag ) {
     $request_url = $this->get_api_url() . "/revalidate?tag=" . $tag;
-    return wp_remote_get( $request_url );
+    return wp_remote_get( $request_url, [ 'timeout' => 1 ] );
   }
 
   /**
@@ -360,7 +270,27 @@ class Helpers {
    */
   public function revalidate_specific_path( $path ) {
     $request_url = $this->get_api_url() . "/revalidate?path=" . urlencode( $path );
-    return wp_remote_get( $request_url );
+    return wp_remote_get( $request_url, [ 'timeout' => 1 ] );
+  }
+
+  /**
+   * Check if a save_post callback should bail (autosave, revision, or nav menu item).
+   *
+   * @param int $post_id The post ID being saved.
+   * @return bool True if the callback should return early.
+   */
+  public function should_skip_save( $post_id ) {
+    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+      return true;
+    }
+    if ( wp_is_post_revision( $post_id ) ) {
+      return true;
+    }
+    $post = get_post( $post_id );
+    if ( ! $post ) {
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -372,6 +302,108 @@ class Helpers {
     } else {
       return get_page_by_path( 'home' );
     }
+  }
+
+  /**
+   * Clear all caches when ?clear is present and user is admin.
+   */
+  public function clear_wp_cache() {
+    if ( isset( $_GET['clear'] ) && current_user_can( 'manage_options' ) ) {
+      wp_cache_flush();
+      global $wpdb;
+      $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '%_transient_%'");
+      if (defined('WP_CLI') && WP_CLI) {
+        \WP_CLI::runcommand('transient delete --all --network');
+        $sites = \WP_CLI::runcommand('site list --field=url', ['return' => true]);
+        $site_urls = explode("\n", trim($sites));
+        foreach ($site_urls as $url) {
+          \WP_CLI::runcommand("--url={$url} transient delete --all");
+        }
+      }
+    }
+  }
+
+  /**
+   * Enable query monitoring for REST API requests.
+   *
+   * Enable via: add_filter('nextpress_enable_query_monitoring', '__return_true');
+   * Or via query param: ?nextpress_debug_queries=1
+   */
+  public function maybe_enable_query_monitoring() {
+    $enabled = apply_filters( 'nextpress_enable_query_monitoring', false );
+
+    if ( isset( $_GET['nextpress_debug_queries'] ) && current_user_can( 'manage_options' ) ) {
+      $enabled = true;
+    }
+
+    if ( ! $enabled ) {
+      return;
+    }
+
+    if ( ! defined( 'SAVEQUERIES' ) ) {
+      define( 'SAVEQUERIES', true );
+    }
+
+    add_action( 'rest_api_init', function() {
+      add_filter( 'rest_post_dispatch', [ $this, 'log_slow_queries_for_rest_request' ], 10, 3 );
+    });
+  }
+
+  /**
+   * Log slow queries for REST API requests.
+   */
+  public function log_slow_queries_for_rest_request( $result, $server, $request ) {
+    global $wpdb;
+
+    if ( empty( $wpdb->queries ) ) {
+      return $result;
+    }
+
+    $slow_query_threshold = apply_filters( 'nextpress_slow_query_threshold', 1.0 );
+    $slow_queries = [];
+    $total_time = 0;
+
+    foreach ( $wpdb->queries as $query ) {
+      $time = $query[1];
+      $total_time += $time;
+
+      if ( $time > $slow_query_threshold ) {
+        $slow_queries[] = [
+          'time' => $time,
+          'sql' => $query[0],
+          'trace' => $query[2]
+        ];
+      }
+    }
+
+    if ( ! empty( $slow_queries ) ) {
+      error_log( sprintf(
+        'Nextpress Slow Query Report for %s:',
+        $request->get_route()
+      ));
+      error_log( sprintf(
+        'Total queries: %d | Total time: %.4fs | Slow queries: %d',
+        count( $wpdb->queries ),
+        $total_time,
+        count( $slow_queries )
+      ));
+
+      foreach ( $slow_queries as $i => $query ) {
+        error_log( sprintf(
+          '[Slow Query #%d] Time: %.4fs | SQL: %s',
+          $i + 1,
+          $query['time'],
+          substr( $query['sql'], 0, 200 )
+        ));
+      }
+    }
+
+    if ( function_exists( 'rest_get_server' ) ) {
+      header( sprintf( 'X-DB-Queries: %d', count( $wpdb->queries ) ) );
+      header( sprintf( 'X-DB-Time: %.4fs', $total_time ) );
+    }
+
+    return $result;
   }
 
   /**

@@ -152,19 +152,7 @@ class Ext_ACF {
               }
             }
 
-            $formatted_items = array_map( function ( $item ) {
-              return [
-                'ID' => $item->ID,
-                'title' => $item->title,
-                'url' => $item->url,
-                'target' => $item->target,
-                'classes' => $item->classes,
-                'menu_item_parent' => $item->menu_item_parent,
-                'acf_data' => $item->acf_data,
-              ];
-            }, $menu_items );
-
-            $block_data['menus'][ $nav_id ] = (array) $formatted_items;
+            $block_data['menus'][ $nav_id ] = array_map( [ $this, 'format_nav_item' ], $menu_items );
           }
         } else {
           $menu_items = wp_get_nav_menu_items(
@@ -175,24 +163,24 @@ class Ext_ACF {
             ]
           );
 
-          $formatted_items = array_map( function ( $item ) {
-            return [
-              'ID' => $item->ID,
-              'title' => $item->title,
-              'url' => $item->url,
-              'target' => $item->target,
-              'classes' => $item->classes,
-              'menu_item_parent' => $item->menu_item_parent,
-              'acf_data' => $item->acf_data,
-            ];
-          }, $menu_items );
-          
-          return $formatted_items;
+          return array_map( [ $this, 'format_nav_item' ], $menu_items );
         }
       }
     }
     
     return $block_data;
+  }
+
+  private function format_nav_item( $item ) {
+    return [
+      'ID'               => $item->ID,
+      'title'            => $item->title,
+      'url'              => $item->url,
+      'target'           => $item->target,
+      'classes'          => $item->classes,
+      'menu_item_parent' => $item->menu_item_parent,
+      'acf_data'         => isset( $item->acf_data ) ? $item->acf_data : null,
+    ];
   }
 
   public function featured_media_posts_api() {
