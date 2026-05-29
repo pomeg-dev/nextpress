@@ -38,6 +38,9 @@ class API_Settings {
     // Add revalidators
 		add_action( 'acf/options_page/save', [ $this, 'revalidate_settings' ], 10, 2 );
 		add_action( 'save_post', [ $this, 'revalidate_menu_settings' ] );
+
+		// Revalidate when safe-list WP options or Yoast settings change.
+		add_action( 'update_option', [ $this, 'revalidate_on_option_update' ], 10, 3 );
   }
 
   public function register_routes() {
@@ -105,17 +108,18 @@ class API_Settings {
   }
 
   /**
-   * Load only a safe allowlist of WP core options for public exposure.
+   * Filterable allowlist of WP core option keys safe for public exposure.
    *
    * SECURITY: Never replace this with a raw SELECT on wp_options — that leaks
    * API keys, SMTP credentials, and secret keys to unauthenticated visitors.
    * Add keys here only if they are safe to expose publicly.
    * Use the 'nextpress_safe_option_keys' filter to extend from other plugins.
    */
-  private function load_options_without_transients() {
-    $safe_keys = apply_filters( 'nextpress_safe_option_keys', [
+  private function get_safe_option_keys() {
+    return apply_filters( 'nextpress_safe_option_keys', [
       'blogname',
       'blogdescription',
+      'blog_public',
       'siteurl',
       'home',
       'page_on_front',
@@ -127,7 +131,7 @@ class API_Settings {
       'start_of_week',
       'WPLANG',
       'show_on_front',
-      'google_tag_manager_enabled', 
+      'google_tag_manager_enabled',
       'google_tag_manager_id',
       'page_for_posts_slug',
       'frontend_url',
@@ -136,12 +140,16 @@ class API_Settings {
       'page_404',
       'favicon',
     ] );
+  }
 
+  /**
+   * Load only the safe allowlist of WP core options.
+   */
+  private function load_options_without_transients() {
     $options = [];
-    foreach ( $safe_keys as $key ) {
+    foreach ( $this->get_safe_option_keys() as $key ) {
       $options[ $key ] = get_option( $key );
     }
-
     return $options;
   }
 
@@ -264,5 +272,36 @@ class API_Settings {
 
     $this->helpers->revalidate_fetch_route( 'before_content' );
     $this->helpers->revalidate_fetch_route( 'after_content' );
+    
+    // Revalidate language templates.
+    if ( function_exists( 'pll_languages_list' ) ) {
+      $languages = pll_languages_list();
+      foreach ( $languages as $lang ) {
+        $this->helpers->revalidate_fetch_route( "before_content_$lang" );
+        $this->helpers->revalidate_fetch_route( "after_content_$lang" );
+      }
+    }
+	}
+
+	/**
+	 * Revalidate when a WP option in our safe list or a Yoast setting is updated.
+	 * Debounced via static flag — settings pages save many options per request.
+	 */
+	public function revalidate_on_option_update( $option, $old_value, $value ) {
+		if ( $old_value === $value ) return;
+
+		static $already_revalidated = false;
+		if ( $already_revalidated ) return;
+
+		$is_safe_option = in_array( $option, $this->get_safe_option_keys(), true );
+		$is_yoast_option = strpos( $option, 'wpseo' ) === 0;
+
+		if ( ! $is_safe_option && ! $is_yoast_option ) return;
+
+		$already_revalidated = true;
+
+		$cache_key = 'nextpress_settings_' . get_current_blog_id();
+		$this->helpers->cache_delete( $cache_key, 'nextpress_settings' );
+		$this->helpers->revalidate_fetch_route( 'settings' );
 	}
 }
