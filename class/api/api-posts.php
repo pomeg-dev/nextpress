@@ -246,22 +246,6 @@ class API_Posts {
       ]
     );
 
-    // CRITICAL FIX: Cap unbounded queries to prevent performance issues
-    // per_page=-1 was causing 30-90s response times on faculty queries
-    if ( isset( $args['posts_per_page'] ) && $args['posts_per_page'] == -1 ) {
-      // Allow override via filter for specific use cases
-      $max_per_page = apply_filters( 'nextpress_max_posts_per_page', 150 );
-      $args['posts_per_page'] = $max_per_page;
-
-      // Log warning for monitoring
-      error_log( sprintf(
-        'Nextpress: Unbounded query capped to %d posts (post_type: %s, params: %s)',
-        $max_per_page,
-        is_array( $args['post_type'] ) ? implode( ',', $args['post_type'] ) : $args['post_type'],
-        isset( $params['filter_department'] ) ? 'filter_department=' . $params['filter_department'] : 'none'
-      ) );
-    }
-
     return $args;
   }
 

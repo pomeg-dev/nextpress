@@ -280,16 +280,12 @@ class Helpers {
    * @return bool True if the callback should return early.
    */
   public function should_skip_save( $post_id ) {
-    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
-      return true;
-    }
-    if ( wp_is_post_revision( $post_id ) ) {
-      return true;
-    }
+    if ( wp_doing_cron() ) return true;
+    if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) return true;
+    if ( wp_is_post_revision( $post_id ) ) return true;
+
     $post = get_post( $post_id );
-    if ( ! $post ) {
-      return true;
-    }
+    if ( ! $post ) return true;
     return false;
   }
 

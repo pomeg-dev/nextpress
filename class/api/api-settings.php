@@ -288,18 +288,20 @@ class API_Settings {
 	 * Debounced via static flag — settings pages save many options per request.
 	 */
 	public function revalidate_on_option_update( $option, $old_value, $value ) {
+    if ( wp_doing_cron() ) return;
 		if ( $old_value === $value ) return;
-
+    if ( strpos( $option, '_transient' ) !== false ) return;
+    
 		static $already_revalidated = false;
 		if ( $already_revalidated ) return;
-
+    
 		$is_safe_option = in_array( $option, $this->get_safe_option_keys(), true );
 		$is_yoast_option = strpos( $option, 'wpseo' ) === 0;
-
+    
 		if ( ! $is_safe_option && ! $is_yoast_option ) return;
-
+    
 		$already_revalidated = true;
-
+    
 		$cache_key = 'nextpress_settings_' . get_current_blog_id();
 		$this->helpers->cache_delete( $cache_key, 'nextpress_settings' );
 		$this->helpers->revalidate_fetch_route( 'settings' );
