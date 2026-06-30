@@ -60,9 +60,9 @@ class Register_Settings {
         'required' => 0,
       ]);
 
-    $google_tag_manager = new FieldsBuilder('google_tag_manager');
-    $google_tag_manager
-      ->addTab("google_tag_manager")
+    $scripts = new FieldsBuilder('scripts');
+    $scripts
+      ->addTab("scripts")
       ->addTrueFalse("google_tag_manager_enabled", [
         'default_value' => 1,
       ])
@@ -77,6 +77,15 @@ class Register_Settings {
             ]
           ]
         ],
+      ])
+      ->addTextArea("head_scripts", [
+        "instructions" => esc_html( "Add any scripts inside the <head> tag" )
+      ])
+      ->addTextArea('body_opening', [
+        "instructions" => esc_html( "Add any scripts inside the opening <body> tag" )
+      ])
+      ->addTextArea('body_closing', [
+        "instructions" => esc_html( "Add any scripts just before the closing </body> tag" )
       ]);
 
     $favicon = new FieldsBuilder('favicon');
@@ -126,7 +135,7 @@ class Register_Settings {
     $settings = new FieldsBuilder('General-settings');
     $settings
       ->addFields($blocks)
-      ->addFields($google_tag_manager)
+      ->addFields($scripts)
       ->addFields($favicon)
       ->addFields($page_404)
       ->addFields($coming_soon)
