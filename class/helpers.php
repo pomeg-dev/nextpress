@@ -82,7 +82,14 @@ class Helpers {
     if ( $frontend_url ) {
       return rtrim( $frontend_url, '/' );
     }
-    
+
+    // Production failsafe: never fall back to a localhost/Docker URL when the
+    // site itself isn't running on localhost. Keeps wp-admin/login reachable
+    // and redirects on-domain when the frontend URL option isn't configured.
+    if ( strpos( site_url(), 'localhost' ) === false ) {
+      return rtrim( home_url(), '/' );
+    }
+
     // Local development: try Docker URLs
     return $this->get_docker_url( $return_local );
   }
