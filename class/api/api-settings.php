@@ -131,6 +131,7 @@ class API_Settings {
       'start_of_week',
       'WPLANG',
       'show_on_front',
+      'enable_custom_cookie_manager',
       'google_tag_manager_enabled',
       'google_tag_manager_id',
       'head_scripts',

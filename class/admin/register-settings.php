@@ -63,6 +63,9 @@ class Register_Settings {
     $scripts = new FieldsBuilder('scripts');
     $scripts
       ->addTab("scripts")
+      ->addTrueFalse("enable_custom_cookie_manager", [
+        'default_value' => 1,
+      ])
       ->addTrueFalse("google_tag_manager_enabled", [
         'default_value' => 1,
       ])

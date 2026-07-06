@@ -199,6 +199,7 @@ class API_Posts {
           'name' => $term->name,
           'description' => $term->description,
           'url' => get_term_link( $term ),
+          'parent' => $term->parent ? $term->parent : null,
         ];
       }
     }
