@@ -335,6 +335,8 @@ class API_Posts {
     $key_parts = [
       $args['post_type'] ?? 'any',
       $args['post_status'] ?? 'publish',
+      $args['orderby'] ?? 'date',
+      $args['order'] ?? 'DESC',
       $args['posts_per_page'] ?? get_option( 'posts_per_page' ),
       $args['paged'] ?? 1,
       $args['s'] ?? '',
