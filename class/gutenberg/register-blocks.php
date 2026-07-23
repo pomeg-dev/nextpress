@@ -424,48 +424,33 @@ class Register_Blocks {
     $result = [];
     $repeaters = [];
 
+    // ACF stores block field data flat:
+    //   - "_{name}"                       => ACF meta (field key reference)
+    //   - "{repeater}"                    => row count
+    //   - "{repeater}_{index}_{subfield}" => repeater row values
+    //   - "{name}"                        => scalar field value
+    // Field names commonly contain underscores, so we group repeater rows by the
+    // "{name}_{index}_{subfield}" pattern and treat everything else as scalar.
     foreach ( $data as $key => $value ) {
-      if (strpos($key, '_') === 0) continue;
-      if ( strpos( $key, '_' ) === false ) {
-        $result[ $key ] = $value;
+      if ( strpos( $key, '_' ) === 0 ) {
+        continue; // skip ACF meta keys ("_name")
+      }
 
-        if (
-          is_numeric( $value ) &&
-          $value > 0 &&
-          isset( $data["_{$key}"] ) &&
-          strpos( $data["_{$key}"], 'field_' ) === 0
-        ) {
-          $repeaters[ $key ] = (int) $value;
-        }
+      if ( preg_match( '/^(.+)_(\d+)_(.+)$/', $key, $matches ) ) {
+        $repeater_name = $matches[1];
+        $index         = (int) $matches[2];
+        $sub_field     = $matches[3];
+        $repeaters[ $repeater_name ][ $index ][ $sub_field ] = $value;
+      } else {
+        // Scalar field, or the repeater's count key (overwritten below).
+        $result[ $key ] = $value;
       }
     }
 
-    // Process each repeater field
-    foreach ( $repeaters as $repeater_name => $count ) {
-      $items = [];
-
-      for ( $i = 0; $i < $count; $i++ ) {
-        $item = [];
-        $prefix = "{$repeater_name}_{$i}_";
-        $prefix_length = strlen( $prefix );
-
-        foreach ( $data as $key => $value ) {
-          if ( strpos( $key, '_' ) === 0 ) continue;
-
-          // Check for correct return values.
-          if ( strpos( $key, $prefix ) === 0 ) {
-            // $acf_key = $data["_$key"];
-            $field_name = substr( $key, $prefix_length );
-            $item[ $field_name ] = $value;
-          }
-        }
-
-        if ( ! empty( $item ) ) {
-          $items[] = $item;
-        }
-      }
-
-      $result[ $repeater_name ] = $items;
+    // Replace each repeater count with its assembled, index-ordered rows.
+    foreach ( $repeaters as $repeater_name => $rows ) {
+      ksort( $rows );
+      $result[ $repeater_name ] = array_values( $rows );
     }
 
     return $result;
