@@ -47,6 +47,9 @@ class Field_Builder {
         case 'number':
           $builder->addNumber( $field['id'], $field_args );
           break;
+        case 'range':
+          $builder->addRange( $field['id'], $field_args );
+          break;
         case 'email':
           $builder->addEmail( $field['id'], $field_args );
           break;
