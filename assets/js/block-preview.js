@@ -22,6 +22,11 @@ window.NextPressBlockManager = window.NextPressBlockManager || (function() {
                         newHeight = event.data.height;
                     }
                     iframe.style.height = newHeight;
+                    // Remember the height on the persistent instance so we can
+                    // re-apply it across ACF re-renders (which replace the
+                    // iframe element) and avoid the collapse-then-resize jerk.
+                    var instance = instances[event.data.iframeId];
+                    if (instance) instance.lastHeight = newHeight;
                 }
             }
         });
@@ -64,6 +69,23 @@ window.NextPressBlockManager = window.NextPressBlockManager || (function() {
         this.lastLoadedHash = '';
         this.isLoading = false;
         this.initialized = false;
+        this.lastHeight = null;
+
+        // Called synchronously the moment ACF injects a freshly re-rendered
+        // block (via the inline register() call). ACF replaces the iframe
+        // element on every field change, so the new element starts with no
+        // height and the loading placeholder is visible, collapsing the block.
+        // Re-apply the last known height immediately and keep the iframe shown
+        // so the editor stays put while the new content loads behind it.
+        this.prepareForReload = function() {
+            if (this.lastHeight == null) return;
+            var newIframe = document.getElementById(this.iframeId);
+            if (!newIframe) return;
+            newIframe.style.height = this.lastHeight;
+            newIframe.style.display = 'block';
+            var newLoading = document.getElementById('loading_' + this.iframeId);
+            if (newLoading) newLoading.style.display = 'none';
+        };
 
         this.init = function() {
             this.iframe = document.getElementById(this.iframeId);
@@ -117,11 +139,21 @@ window.NextPressBlockManager = window.NextPressBlockManager || (function() {
             var postId = this.iframe.getAttribute('data-post-id');
             var encodedContent = this.iframe.getAttribute('data-encoded-content');
 
-            if (this.loading) {
-                this.loading.style.display = 'flex';
-                this.loading.innerHTML = '<span>Updating preview...</span>';
+            // Only show the placeholder / hide the iframe on the very first
+            // load. On subsequent updates we keep the previous height applied
+            // (see prepareForReload) so the block doesn't collapse while the
+            // new content loads.
+            if (this.lastHeight == null) {
+                if (this.loading) {
+                    this.loading.style.display = 'flex';
+                    this.loading.innerHTML = '<span>Updating preview...</span>';
+                }
+                this.iframe.style.display = 'none';
+            } else {
+                this.iframe.style.height = this.lastHeight;
+                this.iframe.style.display = 'block';
+                if (this.loading) this.loading.style.display = 'none';
             }
-            this.iframe.style.display = 'none';
 
             var self = this;
             var newSrc = frontendUrl + '/block-preview?post_id=' + postId + '&content=' + encodedContent + '&iframe_id=' + this.iframeId + '&t=' + Date.now();
@@ -166,6 +198,10 @@ window.NextPressBlockManager = window.NextPressBlockManager || (function() {
         register: function(iframeId) {
             // ACF V3 re-renders blocks, so we need to re-initialize even if instance exists
             if (instances[iframeId]) {
+                // Restore the last known height onto the freshly injected iframe
+                // element immediately, before any async work, so the block never
+                // collapses to the loading placeholder.
+                instances[iframeId].prepareForReload();
                 setTimeout(function() {
                     instances[iframeId].init();
                 }, 100);
