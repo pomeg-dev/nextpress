@@ -39,6 +39,7 @@ class Init {
 		new API_Posts( $this->helpers );
 		new API_Menus( $this->helpers );
 		new API_Theme( $this->helpers );
+		new API_Editor( $this->helpers );
 
 		// Add user flows.
 		// Removing for now as next-auth is too large for most projects.
@@ -51,6 +52,9 @@ class Init {
 
 		// Register gutenberg block fields
 		new Register_Blocks( $this->helpers );
+
+		// SPIKE: page-preview 2b live editor bridge (only active with ?np_spike=1).
+		new Page_Preview_Spike( $this->helpers );
 
 		// URL redirects and preview links
 		new URL_Handlers( $this->helpers );

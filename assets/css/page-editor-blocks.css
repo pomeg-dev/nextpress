@@ -1,0 +1,84 @@
+/**
+ * Nextpress page editor — block styling INSIDE the editor-canvas iframe.
+ *
+ * Loaded via enqueue_block_assets (not enqueue_block_editor_assets) so it
+ * reaches the block list inside the iframe, where admin CSS can't. Styles the
+ * minimal block labels (preview state) and the active/editing state.
+ */
+
+:root {
+  --np-accent: #3858e9;
+  --np-border: #e2e4e7;
+  --np-ink: #1e1e1e;
+  --np-muted: #8a8f98;
+}
+
+/* Breathing room between top-level blocks; drop default block chrome */
+.block-editor-block-list__layout.is-root-container > .wp-block {
+  margin: 0 0 8px !important;
+}
+.acf-block-preview { padding: 0 !important; }
+
+/* ---- Minimal block label (unselected / preview state) ---- */
+.np-editor-block-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px;
+  background: #fff;
+  border: 1px solid var(--np-border);
+  border-radius: 8px;
+  color: var(--np-ink);
+  font: 600 13px/1.2 -apple-system, "Segoe UI", Roboto, sans-serif;
+  cursor: pointer;
+  transition: border-color .12s ease, box-shadow .12s ease, background .12s ease;
+}
+.np-editor-block-label:hover {
+  border-color: #c3ccff;
+  box-shadow: 0 1px 3px rgba(24, 34, 84, .06);
+}
+.np-editor-block-icon.dashicons {
+  flex: 0 0 auto;
+  width: 26px; height: 26px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  color: var(--np-accent);
+  background: #eef1ff;
+  border-radius: 6px;
+}
+.np-editor-block-name {
+  flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---- Active / selected block ---- */
+/* Brief label state before it expands to fields */
+.wp-block.is-selected .np-editor-block-label {
+  border-color: var(--np-accent);
+  box-shadow: 0 0 0 1px var(--np-accent);
+}
+/* Editing state: ACF fields as a clean accented card */
+.acf-block-fields {
+  background: #fff;
+  border: 1px solid var(--np-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.wp-block.is-selected .acf-block-fields {
+  border-color: var(--np-accent);
+  box-shadow: 0 0 0 1px var(--np-accent), 0 4px 14px rgba(24, 34, 84, .08);
+}
+
+/* ---- Inner blocks ---- */
+.np-editor-inner {
+  margin-top: 8px;
+  padding-left: 12px;
+  border-left: 2px solid var(--np-border);
+}
+.np-editor-inner__label {
+  margin: 0 0 6px;
+  font: 700 10px/1 -apple-system, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--np-muted);
+}

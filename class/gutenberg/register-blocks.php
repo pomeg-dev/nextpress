@@ -196,23 +196,27 @@ class Register_Blocks {
 
       acf_add_local_field_group( $global->build() );
 
-      acf_register_block_type(
-        [
-          'name'              => $block_name,
-          'title'             => $block_title,
-          'description'       => 'A custom ' . $block['blockName'] . ' block.',
-          'render_callback'   => [ $this, 'render_nextpress_block' ],
-          'category'          => $theme,
-          'icon'              => $this->get_icon( $block_name ),
-          'keywords'          => [ $block_name, 'custom' ],
-          'supports'          => [
-            'jsx' => true,
-            'anchor' => true
-          ],
-          'api_version'       => 3,
-          'acf_block_version' => 3,
-        ]
-      );
+      $block_args = [
+        'name'              => $block_name,
+        'title'             => $block_title,
+        'description'       => 'A custom ' . $block['blockName'] . ' block.',
+        'render_callback'   => [ $this, 'render_nextpress_block' ],
+        'category'          => $theme,
+        'icon'              => $this->get_icon( $block_name ),
+        'keywords'          => [ $block_name, 'custom' ],
+        'supports'          => [
+          'jsx' => true,
+          'anchor' => true
+        ],
+        'api_version'       => 3,
+        'acf_block_version' => 3,
+      ];
+
+      // Auto mode: selecting a block shows its ACF fields inline, unselected
+      // blocks stay compact labels. (The JS also forces this on selection.)
+      $block_args['mode'] = 'auto';
+
+      acf_register_block_type( $block_args );
     }
   }
 
@@ -232,45 +236,18 @@ class Register_Blocks {
       $inner_blocks = $block['data']["field_{$ib_field_name}-block_inner_blocks"];
     }
 
-    $block_html = $this->convert_acf_block_to_string( $block );
-    $block_html = $this->formatter->parse_block_data( $block_html );
-    $block_html = $this->set_inner_blocks( $block, $post_id, $block_html, $content );
-
-    $block_prefix = isset( $block_html[0]['slug'] )
-        ? 'field_' . str_replace( 'acf-', '', $block_html[0]['slug'] ) . '-block_'
-        : '';
-    $block_html = json_encode( $block_html, JSON_UNESCAPED_SLASHES );
-    if ( $block_prefix ) {
-      $block_html = str_replace( $block_prefix, '', $block_html );
-    }
-
-    // Remove modal_content items
-    $pattern = '/"modal_content":\s*(\{(?:[^{}]|(?1))*\})/';
-    $replacement = '"modal_content": null';
-    $block_html = preg_replace( $pattern, $replacement, $block_html );
-
-    $encoded_content = urlencode( $this->compress_data( $block_html ) );
-    $frontend_url = $this->helpers->get_frontend_url_public();
-    $iframe_id = 'block_preview_' . $block['id'];
-
-    // Create a hash of the content for change detection
-    $content_hash = md5( $block_html );
-
-    // Initial iframe with loading state
-    echo "<div id='block_wrapper_{$iframe_id}' class='nextpress-block-wrapper' data-block-id='{$block['id']}'>";
-    echo "<h4 style=\"margin: 0; color: #007cba; padding: 4px; border-bottom: 1px dashed #007cba;\">Block: " . ucfirst( str_replace( '-', ' ', $block_name ) ) . "</h4>";
-    echo "<div id='loading_{$iframe_id}' class='nextpress-loading' style='display: flex; align-items: center; justify-content: center; height: 100px; background: #f0f0f1; border: 1px dashed #ccc;'>";
-    echo "<span>Loading preview...</span>";
-    echo "</div>";
-    echo "<iframe id='{$iframe_id}' style='display: none; pointer-events: none; min-height: 80px; width: 100%; border: none; transition: height 0.2s ease-out;' data-content-hash='{$content_hash}' data-frontend-url='{$frontend_url}' data-post-id='{$post_id}' data-encoded-content='{$encoded_content}' data-initialized='false'></iframe>";
-    echo "</div>";
-
-    // Register this specific block instance (script is enqueued globally via enqueue_block_assets).
-    echo '<script>(function() {' .
-      'var iframeId = ' . wp_json_encode( $iframe_id ) . ';' .
-      'if (window.NextPressBlockManager) { window.NextPressBlockManager.register(iframeId); }' .
-      ' else { document.addEventListener("DOMContentLoaded", function() { if (window.NextPressBlockManager) window.NextPressBlockManager.register(iframeId); }); }' .
-    '})();</script>';
+    // Classic per-block preview iframe is DISABLED — the page editor's Next
+    // canvas is the preview now. Always render a compact label; InnerBlocks
+    // below keep nested blocks editable natively. This removes the double-fetch
+    // and the fragile np_spike detection entirely (Gutenberg strips the param).
+    $np_short = strpos( $block_name, '--' ) !== false
+      ? substr( $block_name, strpos( $block_name, '--' ) + 2 )
+      : $block_name;
+    $np_label = ucwords( str_replace( '-', ' ', $np_short ) );
+    echo '<div class="np-editor-block-label">'
+      . '<span class="np-editor-block-icon dashicons dashicons-' . esc_attr( $this->get_icon( $block_name ) ) . '"></span>'
+      . '<span class="np-editor-block-name">' . esc_html( $np_label ) . '</span>'
+      . '</div>';
 
     $block_template = [
       [
@@ -283,8 +260,8 @@ class Register_Blocks {
     $allowed_blocks = $inner_blocks ?? [];
     if ( ! empty( $inner_blocks ) ) :
       ?>
-      <div class="nextpress-block" style="border: 2px solid #007cba; padding: 0 10px; margin: 0; background-color: #f0f0f1;">
-        <h5 style="margin: 10px 0 0; color: #007cba; padding: 0 0 10px; border-bottom: 1px dotted #007cba;">Inner blocks:</h5>
+      <div class="np-editor-inner">
+        <p class="np-editor-inner__label">Inner blocks</p>
         <InnerBlocks
             template="<?php echo esc_attr( wp_json_encode( $block_template ) ); ?>"
             <?php
