@@ -14,6 +14,9 @@
 }
 
 /* Breathing room between top-level blocks; drop default block chrome */
+.block-editor-block-list__layout.is-root-container {
+  padding: 1rem !important;
+}
 .block-editor-block-list__layout.is-root-container > .wp-block {
   margin: 0 0 8px !important;
 }
