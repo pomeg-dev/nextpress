@@ -36,14 +36,16 @@ class Page_Preview_Spike {
   }
 
   public function admin_body_class( $classes ) {
-    if ( $this->is_spike() ) {
+    if ( $this->is_spike() && $this->helpers->is_page_preview_mode() ) {
       $classes .= ' np-editor-booting';
     }
     return $classes;
   }
 
   public function enqueue_canvas_block_styles() {
-    if ( ! is_admin() ) {
+    // Block-label styling only applies in page-preview mode (legacy uses the
+    // classic iframe previews, which have their own CSS).
+    if ( ! is_admin() || ! $this->helpers->is_page_preview_mode() ) {
       return;
     }
     wp_enqueue_style(
@@ -59,6 +61,11 @@ class Page_Preview_Spike {
   }
 
   public function enqueue() {
+    // Whole feature is off unless the admin selected page-preview mode.
+    if ( ! $this->helpers->is_page_preview_mode() ) {
+      return;
+    }
+
     if ( ! $this->is_spike() ) {
       // On the normal editor, add the "Edit visually" entry button.
       wp_enqueue_script(
@@ -101,46 +108,13 @@ class Page_Preview_Spike {
         'nonce'          => wp_create_nonce( 'wp_rest' ),
         // Surfaced in the compat banner when a WP-internal locator is missing.
         'wpVersion'      => get_bloginfo( 'version' ),
-        // Stateless HMAC token: the auth boundary for the Next render (verified
+        // Stateless HMAC token — the auth boundary for the Next render (verified
         // in the renderBlocks Server Action + page.tsx). `sid` isolates this
-        // editor session so two editors on the same post can't collide.
-        'previewToken'   => $this->mint_token( $post_id ),
+        // editor session so two editors on the same post can't collide. Minted by
+        // Helpers so the secret has a single source (shared with the compat check).
+        'previewToken'   => $this->helpers->mint_preview_token( $post_id ),
       ]
     );
-  }
-
-  /**
-   * Shared secret for the preview token. Defined in wp-config
-   * (NEXTPRESS_PREVIEW_SECRET); the same value lives in the Next .env. The
-   * fallback keeps a fresh install working out of the box — override in prod.
-   */
-  private function preview_secret() {
-    if ( defined( 'NEXTPRESS_PREVIEW_SECRET' ) && NEXTPRESS_PREVIEW_SECRET ) {
-      return NEXTPRESS_PREVIEW_SECRET;
-    }
-    return 'c1492212c32302f323046d9bfb9496980b175da70b0f9004154272e8cbc273be';
-  }
-
-  private function base64url( $bin ) {
-    return rtrim( strtr( base64_encode( $bin ), '+/', '-_' ), '=' );
-  }
-
-  /**
-   * Mint `base64url(payload).base64url(HMAC-SHA256(payload))`.
-   * payload = { uid, post, sid, iat, exp } — signed over the base64url payload
-   * string so the Next side can recompute it from the wire value verbatim.
-   */
-  private function mint_token( $post_id ) {
-    $payload = [
-      'uid'  => get_current_user_id(),
-      'post' => (int) $post_id,
-      'sid'  => wp_generate_uuid4(),
-      'iat'  => time(),
-      'exp'  => time() + 2 * HOUR_IN_SECONDS,
-    ];
-    $payload_b64 = $this->base64url( wp_json_encode( $payload ) );
-    $sig         = hash_hmac( 'sha256', $payload_b64, $this->preview_secret(), true );
-    return $payload_b64 . '.' . $this->base64url( $sig );
   }
 
   private function origin_of( $url ) {

@@ -49,6 +49,15 @@ class Register_Pages {
           'menu_slug'     => 'templates',
         ]
       );
+
+      acf_add_options_sub_page(
+        [
+          'page_title'    => __( 'Editor', 'nextpress' ),
+          'menu_title'    => __( 'Editor', 'nextpress' ),
+          'parent_slug'   => 'nextpress',
+          'menu_slug'     => 'editor',
+        ]
+      );
     }
   }
 }

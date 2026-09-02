@@ -38,6 +38,7 @@ function autoloader( $class ) {
         'nextpress\\register_settings'       => '/class/admin/register-settings.php',
         'nextpress\\register_pages'          => '/class/admin/register-pages.php',
         'nextpress\\register_templates'      => '/class/admin/register-templates.php',
+        'nextpress\\register_editor'         => '/class/admin/register-editor.php',
         'nextpress\\fix_autoload_transients' => '/class/admin/fix-autoload-transients.php',
         'nextpress\\url_handlers'            => '/class/admin/url-handlers.php',
         'nextpress\\register_blocks'         => '/class/gutenberg/register-blocks.php',

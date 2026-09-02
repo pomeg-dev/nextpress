@@ -51,6 +51,10 @@ class Register_Blocks {
     if ( ! is_admin() ) {
       return;
     }
+    // Page-preview mode disables the classic per-block iframe previews entirely.
+    if ( $this->helpers->is_page_preview_mode() ) {
+      return;
+    }
     wp_enqueue_script(
       'nextpress-block-preview',
       NEXTPRESS_URI . '/assets/js/block-preview.js',
@@ -225,21 +229,115 @@ class Register_Blocks {
    * Requests nextjs /block-preview route in an iframe with minimal re-rendering
    */
   public function render_nextpress_block( $block, $content = '', $is_preview = false, $post_id = 0 ) {
-    $block_name = str_replace( 'acf/', '', $block['name'] );
+    // The editor mode (admin setting) decides how a block renders in the editor:
+    //   legacy       → classic per-block iframe preview (boilerplate behaviour)
+    //   page_preview → minimal label; the Next live canvas is the preview
+    if ( $this->helpers->is_page_preview_mode() ) {
+      $this->render_page_preview_block( $block, $content, $is_preview, $post_id );
+    } else {
+      $this->render_legacy_block( $block, $content, $is_preview, $post_id );
+    }
+  }
 
-    // Find inner blocks.
+  /** Shared: resolve a block's inner blocks (ACF stores them a couple of ways). */
+  private function get_block_inner_blocks( $block ) {
+    $block_name = str_replace( 'acf/', '', $block['name'] );
     $ib_field_name = str_replace( '--', '-', $block_name );
-    $inner_blocks = [];
     if ( isset( $block['data']['inner_blocks'] ) ) {
-      $inner_blocks = $block['data']['inner_blocks'];
-    } else if ( isset( $block['data']["field_{$ib_field_name}-block_inner_blocks"] ) ) {
-      $inner_blocks = $block['data']["field_{$ib_field_name}-block_inner_blocks"];
+      return $block['data']['inner_blocks'];
+    }
+    if ( isset( $block['data']["field_{$ib_field_name}-block_inner_blocks"] ) ) {
+      return $block['data']["field_{$ib_field_name}-block_inner_blocks"];
+    }
+    return [];
+  }
+
+  /**
+   * LEGACY mode (default): classic per-block iframe preview to the Next
+   * /block-preview route, managed by block-preview.js. Unchanged from the
+   * boilerplate — this is what ships on every site.
+   */
+  private function render_legacy_block( $block, $content = '', $is_preview = false, $post_id = 0 ) {
+    $block_name = str_replace( 'acf/', '', $block['name'] );
+    $inner_blocks = $this->get_block_inner_blocks( $block );
+
+    $block_html = $this->convert_acf_block_to_string( $block );
+    $block_html = $this->formatter->parse_block_data( $block_html );
+    $block_html = $this->set_inner_blocks( $block, $post_id, $block_html, $content );
+
+    $block_prefix = isset( $block_html[0]['slug'] )
+        ? 'field_' . str_replace( 'acf-', '', $block_html[0]['slug'] ) . '-block_'
+        : '';
+    $block_html = json_encode( $block_html, JSON_UNESCAPED_SLASHES );
+    if ( $block_prefix ) {
+      $block_html = str_replace( $block_prefix, '', $block_html );
     }
 
-    // Classic per-block preview iframe is DISABLED — the page editor's Next
-    // canvas is the preview now. Always render a compact label; InnerBlocks
-    // below keep nested blocks editable natively. This removes the double-fetch
-    // and the fragile np_spike detection entirely (Gutenberg strips the param).
+    // Remove modal_content items
+    $pattern = '/"modal_content":\s*(\{(?:[^{}]|(?1))*\})/';
+    $replacement = '"modal_content": null';
+    $block_html = preg_replace( $pattern, $replacement, $block_html );
+
+    $encoded_content = urlencode( $this->compress_data( $block_html ) );
+    $frontend_url = $this->helpers->get_frontend_url_public();
+    $iframe_id = 'block_preview_' . $block['id'];
+
+    // Create a hash of the content for change detection
+    $content_hash = md5( $block_html );
+
+    // Initial iframe with loading state
+    echo "<div id='block_wrapper_{$iframe_id}' class='nextpress-block-wrapper' data-block-id='{$block['id']}'>";
+    echo "<h4 style=\"margin: 0; color: #007cba; padding: 4px; border-bottom: 1px dashed #007cba;\">Block: " . ucfirst( str_replace( '-', ' ', $block_name ) ) . "</h4>";
+    echo "<div id='loading_{$iframe_id}' class='nextpress-loading' style='display: flex; align-items: center; justify-content: center; height: 100px; background: #f0f0f1; border: 1px dashed #ccc;'>";
+    echo "<span>Loading preview...</span>";
+    echo "</div>";
+    echo "<iframe id='{$iframe_id}' style='display: none; pointer-events: none; min-height: 80px; width: 100%; border: none; transition: height 0.2s ease-out;' data-content-hash='{$content_hash}' data-frontend-url='{$frontend_url}' data-post-id='{$post_id}' data-encoded-content='{$encoded_content}' data-initialized='false'></iframe>";
+    echo "</div>";
+
+    // Register this specific block instance (script is enqueued globally via enqueue_block_assets).
+    echo '<script>(function() {' .
+      'var iframeId = ' . wp_json_encode( $iframe_id ) . ';' .
+      'if (window.NextPressBlockManager) { window.NextPressBlockManager.register(iframeId); }' .
+      ' else { document.addEventListener("DOMContentLoaded", function() { if (window.NextPressBlockManager) window.NextPressBlockManager.register(iframeId); }); }' .
+    '})();</script>';
+
+    $block_template = [
+      [
+        'core/paragraph',
+        [
+          'placeholder' => __( 'Type / to choose a block', 'luna' ),
+        ],
+      ],
+    ];
+    $allowed_blocks = $inner_blocks ?? [];
+    if ( ! empty( $inner_blocks ) ) :
+      ?>
+      <div class="nextpress-block" style="border: 2px solid #007cba; padding: 0 10px; margin: 0; background-color: #f0f0f1;">
+        <h5 style="margin: 10px 0 0; color: #007cba; padding: 0 0 10px; border-bottom: 1px dotted #007cba;">Inner blocks:</h5>
+        <InnerBlocks
+            template="<?php echo esc_attr( wp_json_encode( $block_template ) ); ?>"
+            <?php
+            if ( $allowed_blocks && $allowed_blocks[0] !== 'all' ) :
+                ?>
+                allowedBlocks="<?php echo esc_attr( wp_json_encode( $allowed_blocks ) ); ?>"
+                <?php
+            endif;
+            ?>
+        />
+        </div>
+        <?php
+    endif;
+  }
+
+  /**
+   * PAGE-PREVIEW mode (experimental): a compact label; the Next live canvas is
+   * the preview. No per-block iframe → no double-fetch. InnerBlocks stay editable
+   * natively.
+   */
+  private function render_page_preview_block( $block, $content = '', $is_preview = false, $post_id = 0 ) {
+    $block_name = str_replace( 'acf/', '', $block['name'] );
+    $inner_blocks = $this->get_block_inner_blocks( $block );
+
     $np_short = strpos( $block_name, '--' ) !== false
       ? substr( $block_name, strpos( $block_name, '--' ) + 2 )
       : $block_name;

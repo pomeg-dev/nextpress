@@ -116,6 +116,78 @@ class Helpers {
   }
 
   /**
+   * Server-side frontend URL — reachable from PHP/Docker (host.docker.internal
+   * locally, the real domain in prod). Use for wp_remote_* calls;
+   * get_frontend_url_public() is the browser-facing URL (localhost in dev).
+   */
+  public function get_frontend_url_internal() {
+    return $this->get_frontend_url( false );
+  }
+
+  /**
+   * Page editor mode: 'legacy' (default — classic per-block iframe previews,
+   * identical to the boilerplate) or 'page_preview' (experimental live canvas +
+   * minimal block labels + Edit Visually). A future licensing add-on can force
+   * legacy by returning false from the nextpress_live_editor_available filter.
+   */
+  public function page_editor_mode() {
+    $mode = 'legacy';
+    if ( function_exists( 'get_field' ) ) {
+      $stored = get_field( 'page_editor_mode', 'option' );
+      if ( $stored ) {
+        $mode = $stored;
+      }
+    }
+    if ( ! apply_filters( 'nextpress_live_editor_available', true ) ) {
+      $mode = 'legacy';
+    }
+    return $mode === 'page_preview' ? 'page_preview' : 'legacy';
+  }
+
+  public function is_page_preview_mode() {
+    return $this->page_editor_mode() === 'page_preview';
+  }
+
+  /**
+   * Shared secret for the live-preview token (wp-config NEXTPRESS_PREVIEW_SECRET,
+   * mirrored in the Next .env). The fallback keeps a fresh install working out of
+   * the box — override it in production.
+   */
+  public function preview_secret() {
+    if ( defined( 'NEXTPRESS_PREVIEW_SECRET' ) && NEXTPRESS_PREVIEW_SECRET ) {
+      return NEXTPRESS_PREVIEW_SECRET;
+    }
+    return 'c1492212c32302f323046d9bfb9496980b175da70b0f9004154272e8cbc273be';
+  }
+
+  /** True while still using the shipped default secret (a prod security nudge). */
+  public function preview_secret_is_default() {
+    return $this->preview_secret() === 'c1492212c32302f323046d9bfb9496980b175da70b0f9004154272e8cbc273be';
+  }
+
+  private function preview_base64url( $bin ) {
+    return rtrim( strtr( base64_encode( $bin ), '+/', '-_' ), '=' );
+  }
+
+  /**
+   * Mint `base64url(payload).base64url(HMAC-SHA256(payload))` for the Next live
+   * preview. payload = { uid, post, sid, iat, exp }; signed over the base64url
+   * payload string so the Next side can recompute it from the wire value.
+   */
+  public function mint_preview_token( $post_id = 0 ) {
+    $payload = [
+      'uid'  => get_current_user_id(),
+      'post' => (int) $post_id,
+      'sid'  => function_exists( 'wp_generate_uuid4' ) ? wp_generate_uuid4() : uniqid( '', true ),
+      'iat'  => time(),
+      'exp'  => time() + 2 * HOUR_IN_SECONDS,
+    ];
+    $payload_b64 = $this->preview_base64url( wp_json_encode( $payload ) );
+    $sig         = hash_hmac( 'sha256', $payload_b64, $this->preview_secret(), true );
+    return $payload_b64 . '.' . $this->preview_base64url( $sig );
+  }
+
+  /**
    * Fetch all themes/blocks from nextjs api
    */
   public function fetch_blocks_from_api( $theme = null, $source = '' ) {

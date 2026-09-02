@@ -31,6 +31,7 @@ class Init {
 		new Register_Pages();
 		new Register_Settings( $this->helpers );
 		new Register_Templates( $this->helpers );
+		new Register_Editor( $this->helpers );
 		new Fix_Autoload_Transients();
 
 		// Register API routes
