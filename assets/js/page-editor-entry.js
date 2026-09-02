@@ -18,12 +18,23 @@
 
         var a = document.createElement('a');
         a.id = 'np-enter-btn';
-        a.textContent = 'Edit visually';
         a.href = url.toString();
+        a.innerHTML =
+          '<span class="dashicons dashicons-visibility" aria-hidden="true" ' +
+          'style="font-size:16px;width:16px;height:16px;line-height:16px;margin-right:6px;"></span>' +
+          'Edit visually';
         a.style.cssText =
           'display:inline-flex;align-items:center;margin-right:8px;padding:6px 12px;' +
           'background:#3858e9;color:#fff;border-radius:6px;font-weight:600;' +
-          'text-decoration:none;font-size:13px;';
+          'text-decoration:none;font-size:13px;transition:background .12s ease,box-shadow .12s ease;';
+        a.addEventListener('mouseenter', function () {
+          a.style.background = '#2c46c9';
+          a.style.boxShadow = '0 2px 8px rgba(56,88,233,.35)';
+        });
+        a.addEventListener('mouseleave', function () {
+          a.style.background = '#3858e9';
+          a.style.boxShadow = 'none';
+        });
         host.insertBefore(a, host.firstChild);
         clearInterval(timer);
       }

@@ -11,9 +11,45 @@
  */
 (function () {
   var cfg = window.NP_PREVIEW;
-  if (!cfg || !window.wp || !wp.data || !wp.blocks) {
-    return;
-  }
+  if (!cfg) return; // not the preview editor page
+
+  // --------------------------------------------------------------- WP adapter
+  // Every coupling to WordPress/Gutenberg internals lives here, so a WP/ACF
+  // version bump is a one-object patch instead of a codebase grep. Tiers:
+  //   - stores: sanctioned public wp.data APIs (stable, low risk)
+  //   - DOM/ARIA locators: fragile — note aria-labels are LOCALIZED
+  //   - ourPreviewLabel: our own markup (from render_nextpress_block)
+  // The boot() self-check validates the critical ones and fails LOUDLY (banner +
+  // standard editor left intact) rather than silently half-working.
+  var NP_WP = {
+    stores: { blockEditor: 'core/block-editor', editor: 'core/editor' },
+    // The block list moved into this iframe in WP 6.3+; we fall back to the top
+    // document when it isn't present (see editorDoc).
+    canvasIframe: 'iframe[name="editor-canvas"]',
+    blockNode: function (id) { return '[data-block="' + id + '"]'; },
+    ourPreviewLabel: '.np-editor-block-label',
+    // ACF edit/preview toggle. aria-label is TRANSLATED, so no single string is
+    // safe — try a chain (most stable / known-good first), first hit wins.
+    // Entries are CSS selector strings or (doc) -> Element|null functions. If a
+    // WP/ACF release renames the toggle, add a locator here.
+    editToggleChain: [
+      'button[aria-label="Edit Block"]',   // confirmed on our current WP/ACF
+      'button[aria-label="Edit block"]',
+      'button[aria-label="Edit"]',
+      function (doc) {
+        // Locale-tolerant fallback: scan block-toolbar buttons for an edit verb.
+        var btns = doc.querySelectorAll(
+          '.block-editor-block-toolbar button, .block-editor-block-contextual-toolbar button'
+        );
+        for (var i = 0; i < btns.length; i++) {
+          var name = (btns[i].getAttribute('aria-label') || btns[i].textContent || '')
+            .trim().toLowerCase();
+          if (name === 'edit' || name.indexOf('edit ') === 0) return btns[i];
+        }
+        return null;
+      }
+    ]
+  };
 
   var DEBOUNCE_MS = 350;
   var iframe, statusEl, saveBtn, titleEl, pushTimer;
@@ -24,15 +60,23 @@
   // Viewport preview: render the iframe at the device's LOGICAL width (so the
   // site picks the right responsive layout) and CSS-scale it to fit the pane.
   var DEVICES = { desktop: 1440, tablet: 768, mobile: 380 };
+  // Minimal device frames. Padding (device px, pre-scale) is set inline by JS so
+  // the math and the CSS bezel share one source; the .cls draws the look. The
+  // iframe keeps the exact DEVICES width so the site's media queries still fire.
+  var FRAMES = {
+    desktop: { cls: 'np-frame--desktop', top: 0,  right: 0,  bottom: 0,  left: 0 },
+    tablet:  { cls: 'np-frame--tablet',  top: 20, right: 20, bottom: 20, left: 20 },
+    mobile:  { cls: 'np-frame--mobile',  top: 40, right: 12, bottom: 40, left: 12 }
+  };
   var device = 'desktop';
   var stageEl, sizerEl, frameEl, widthReadout, fitBtnEl;
   var zoomMode = 'fit';           // 'fit' (auto) | 'manual'
   var zoomLevel = 1;              // used in manual mode
   var ZOOM_MIN = 0.25, ZOOM_MAX = 2, ZOOM_STEP = 0.1;
 
-  var bed = function () { return wp.data.select('core/block-editor'); };
-  var bedDispatch = function () { return wp.data.dispatch('core/block-editor'); };
-  var edSel = function () { return wp.data.select('core/editor'); };
+  var bed = function () { return wp.data.select(NP_WP.stores.blockEditor); };
+  var bedDispatch = function () { return wp.data.dispatch(NP_WP.stores.blockEditor); };
+  var edSel = function () { return wp.data.select(NP_WP.stores.editor); };
 
   function el(tag, props, children) {
     var node = document.createElement(tag);
@@ -65,7 +109,8 @@
     ]);
 
     iframe = el('iframe', { id: 'np-preview-iframe',
-      src: cfg.frontendUrl + '/page-preview/?post=' + encodeURIComponent(cfg.postId) });
+      src: cfg.frontendUrl + '/page-preview/?post=' + encodeURIComponent(cfg.postId)
+        + '&np_token=' + encodeURIComponent(cfg.previewToken || '') });
     frameEl = el('div', { id: 'np-canvas-frame' }, [iframe]);
     sizerEl = el('div', { id: 'np-canvas-sizer' }, [frameEl]);
     stageEl = el('div', { id: 'np-canvas-stage' }, [sizerEl]);
@@ -144,15 +189,19 @@
     applyViewport();
   }
 
-  function fitScaleFor(dw) {
+  // Outer width = device width + side bezels (what actually has to fit the pane).
+  function frameOuterW(dev) {
+    var f = FRAMES[dev] || FRAMES.desktop;
+    return (DEVICES[dev] || DEVICES.desktop) + f.left + f.right;
+  }
+  function fitScaleFor(dev) {
     var cs = getComputedStyle(stageEl);
     var padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
-    return Math.min(1, (stageEl.clientWidth - padX) / dw);
+    return Math.min(1, (stageEl.clientWidth - padX) / frameOuterW(dev));
   }
 
   function zoomBy(delta) {
-    var dw = DEVICES[device] || DEVICES.desktop;
-    var base = (zoomMode === 'fit') ? fitScaleFor(dw) : zoomLevel;
+    var base = (zoomMode === 'fit') ? fitScaleFor(device) : zoomLevel;
     zoomLevel = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round((base + delta) * 20) / 20));
     zoomMode = 'manual';
     applyViewport();
@@ -175,13 +224,20 @@
     var availW = stageEl.clientWidth - padX;
     var availH = stageEl.clientHeight - padY;
     var dw = DEVICES[device] || DEVICES.desktop;
-    var scale = (zoomMode === 'fit') ? Math.min(1, availW / dw) : zoomLevel;
-    var frameH = Math.max(1, Math.round(availH / scale)); // fill pane height at this scale
+    var f = FRAMES[device] || FRAMES.desktop;
+    var outerW = dw + f.left + f.right;
+    var scale = (zoomMode === 'fit') ? Math.min(1, availW / outerW) : zoomLevel;
+    var outerH = Math.max(1, Math.round(availH / scale)); // fill pane height at this scale
 
-    frameEl.style.width = dw + 'px';
-    frameEl.style.height = frameH + 'px';
+    // Device look + bezel (border-box, so the iframe content box stays dw wide).
+    frameEl.classList.remove('np-frame--desktop', 'np-frame--tablet', 'np-frame--mobile');
+    frameEl.classList.add(f.cls);
+    frameEl.style.padding = f.top + 'px ' + f.right + 'px ' + f.bottom + 'px ' + f.left + 'px';
+
+    frameEl.style.width = outerW + 'px';
+    frameEl.style.height = outerH + 'px';
     frameEl.style.transform = 'scale(' + scale + ')';
-    sizerEl.style.width = Math.round(dw * scale) + 'px';
+    sizerEl.style.width = Math.round(outerW * scale) + 'px';
     sizerEl.style.height = availH + 'px';
     if (widthReadout) widthReadout.textContent = Math.round(scale * 100) + '%';
     if (fitBtnEl) fitBtnEl.classList.toggle('is-active', zoomMode === 'fit');
@@ -253,11 +309,11 @@
   // The block list renders inside the editor-canvas iframe on modern WP; fall
   // back to the top document otherwise.
   function editorDoc() {
-    var cv = document.querySelector('iframe[name="editor-canvas"]');
+    var cv = document.querySelector(NP_WP.canvasIframe);
     return (cv && cv.contentDocument) ? cv.contentDocument : document;
   }
   function editorBlockNode(clientId) {
-    return editorDoc().querySelector('[data-block="' + clientId + '"]');
+    return editorDoc().querySelector(NP_WP.blockNode(clientId));
   }
 
   // Scroll the LEFT Gutenberg pane to a block. Uses INSTANT scroll (not smooth):
@@ -280,21 +336,41 @@
     if (data.type === 'np-ready') {
       lastPayload = '';
       pushBlocks();
+    } else if (data.type === 'np-rendered') {
+      fadeBootLoader(); // canvas has painted real content → reveal the shell
     } else if (data.type === 'np-select' && data.clientId) {
       pendingEditorScroll = data.clientId; // came from canvas → scroll the editor
       bedDispatch().selectBlock(data.clientId); // id === clientId, any depth
     }
   });
 
+  // Fade + remove the server-painted boot loader (see page-editor.css).
+  function fadeBootLoader() {
+    var b = document.body;
+    if (!b.classList.contains('np-editor-booting') || b.classList.contains('np-boot-done')) return;
+    b.classList.add('np-boot-done');
+    setTimeout(function () { b.classList.remove('np-editor-booting', 'np-boot-done'); }, 400);
+  }
+
   // ------------------------------------------------------- ACF edit mode
   // ACF ignores programmatic attribute writes — its edit/preview view is driven
-  // by its own state, flipped only by the toolbar toggle (aria-label "Edit
-  // Block"). We click it for the selected block, but ONLY while it still shows
-  // our preview label, so we never toggle a block's fields back off. Retries
-  // because the toolbar/block render async after selection.
+  // by its own state, flipped only by the toolbar toggle. That toggle's
+  // aria-label is LOCALIZED, so we resolve it through NP_WP.editToggleChain (a
+  // priority list of locators, first hit wins) across both the top document and
+  // the canvas iframe. We click it for the selected block, but ONLY while it
+  // still shows our preview label, so we never toggle a block's fields back off.
+  // Retries because the toolbar/block render async after selection.
   function findEditToggle() {
-    var sel = 'button[aria-label="Edit Block"], button[aria-label="Edit block"]';
-    return document.querySelector(sel) || editorDoc().querySelector(sel);
+    var docs = [document, editorDoc()];
+    for (var i = 0; i < NP_WP.editToggleChain.length; i++) {
+      var entry = NP_WP.editToggleChain[i];
+      for (var d = 0; d < docs.length; d++) {
+        if (!docs[d]) continue;
+        var hit = (typeof entry === 'function') ? entry(docs[d]) : docs[d].querySelector(entry);
+        if (hit) return hit;
+      }
+    }
+    return null;
   }
 
   function forceEditMode(attempt) {
@@ -307,7 +383,7 @@
     // still be the previous block's, so clicking then would edit the wrong
     // (previous) block. Click only when the selected block's own toolbar is
     // active (is-selected); fall back to clicking anyway after a few tries.
-    if (node && !node.querySelector('.np-editor-block-label')) return;
+    if (node && !node.querySelector(NP_WP.ourPreviewLabel)) return;
     if (node && (node.classList.contains('is-selected') || attempt >= 3)) {
       var btn = findEditToggle();
       if (btn) btn.click();
@@ -338,7 +414,58 @@
     updateStatus();
   }
 
-  wp.domReady(function () {
+  // --------------------------------------------------------------- compat + boot
+  // Fail LOUD, not silent. The old failure mode was a locator returning null and
+  // a feature quietly dying. Instead: verify the critical WP internals up front;
+  // if one is missing, show a banner and leave the STANDARD editor usable (we
+  // never add .np-editor-active, so nothing gets stripped) rather than shipping a
+  // broken half-experience.
+  function compatIssues() {
+    var out = [];
+    if (!window.wp || !wp.data || !wp.data.select) { out.push('wp.data unavailable'); return out; }
+    if (!wp.data.select(NP_WP.stores.blockEditor)) out.push('block-editor store "' + NP_WP.stores.blockEditor + '" missing');
+    if (!wp.data.select(NP_WP.stores.editor)) out.push('editor store "' + NP_WP.stores.editor + '" missing');
+    if (!wp.blocks || !wp.blocks.serialize || !wp.blocks.cloneBlock) out.push('wp.blocks.serialize/cloneBlock missing');
+    return out;
+  }
+
+  function showCompatBanner(lines, fatal) {
+    if (document.getElementById('np-compat-banner')) return;
+    var ver = cfg.wpVersion ? ' (WordPress ' + cfg.wpVersion + ')' : '';
+    var msg = fatal
+      ? 'Live preview isn’t available on this setup' + ver + ' — you can keep editing in the standard editor.'
+      : 'Live preview loaded with issues' + ver + ' — some features may not work.';
+    var banner = el('div', { id: 'np-compat-banner', class: fatal ? 'is-fatal' : '' }, [
+      el('span', { class: 'np-compat-msg', text: '⚠ ' + msg }),
+      el('button', { class: 'np-compat-detail', text: 'Details', title: lines.join('\n'),
+        onclick: function () { window.alert(lines.join('\n')); } }),
+      el('button', { class: 'np-compat-dismiss', text: '✕', title: 'Dismiss',
+        onclick: function () { banner.remove(); } })
+    ]);
+    document.body.appendChild(banner);
+    console.error('[np-editor] compatibility issue(s):', lines);
+  }
+
+  // The canvas + block nodes render async; retry before warning (non-fatal — the
+  // core preview may still work, only click-to-select depends on this).
+  function checkEditorReachable(attempt) {
+    attempt = attempt || 0;
+    var cv = document.querySelector(NP_WP.canvasIframe);
+    if ((cv && cv.contentDocument && cv.contentDocument.querySelector('[data-block]')) ||
+        document.querySelector('[data-block]')) return; // found
+    if (attempt < 40) { setTimeout(function () { checkEditorReachable(attempt + 1); }, 150); return; }
+    showCompatBanner(['Editor canvas / block nodes not found — selecting a block may not work. ' +
+      'The "' + NP_WP.canvasIframe + '" locator may be out of date for this WP version.'], false);
+  }
+
+  function boot() {
+    var issues = compatIssues();
+    if (issues.length) {
+      showCompatBanner(issues, true); // standard editor left intact
+      fadeBootLoader();               // reveal it (loader was covering the flash)
+      return;
+    }
+
     buildShell();
     updateStatus();
     applyViewport();
@@ -347,5 +474,12 @@
     window.addEventListener('resize', applyViewport);
     // Attach the subscription FIRST so a later error can never detach it.
     wp.data.subscribe(onStoreChange);
-  });
+    checkEditorReachable();
+    // Primary reveal is the canvas's np-rendered message; this is the safety net
+    // if it never arrives (empty page, canvas error).
+    setTimeout(fadeBootLoader, 8000);
+  }
+
+  if (window.wp && wp.domReady) wp.domReady(boot);
+  else document.addEventListener('DOMContentLoaded', boot); // wp missing → still banner
 })();

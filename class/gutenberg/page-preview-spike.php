@@ -28,6 +28,18 @@ class Page_Preview_Spike {
     // Block-view styling must load INSIDE the editor-canvas iframe, which only
     // enqueue_block_assets reaches (admin CSS in the top frame can't).
     add_action( 'enqueue_block_assets', [ $this, 'enqueue_canvas_block_styles' ] );
+    // Paint the boot loader from first paint (server-side class) so the native
+    // editor never flashes before the JS builds the shell over it. The JS fades
+    // it once the canvas has rendered; chrome-hiding stays JS-side so a JS
+    // failure degrades to the intact standard editor.
+    add_filter( 'admin_body_class', [ $this, 'admin_body_class' ] );
+  }
+
+  public function admin_body_class( $classes ) {
+    if ( $this->is_spike() ) {
+      $classes .= ' np-editor-booting';
+    }
+    return $classes;
   }
 
   public function enqueue_canvas_block_styles() {
@@ -87,8 +99,48 @@ class Page_Preview_Spike {
         'frontendOrigin' => $this->origin_of( $frontend_url ),
         'restUrl'        => esc_url_raw( rest_url( 'nextpress/format' ) ),
         'nonce'          => wp_create_nonce( 'wp_rest' ),
+        // Surfaced in the compat banner when a WP-internal locator is missing.
+        'wpVersion'      => get_bloginfo( 'version' ),
+        // Stateless HMAC token: the auth boundary for the Next render (verified
+        // in the renderBlocks Server Action + page.tsx). `sid` isolates this
+        // editor session so two editors on the same post can't collide.
+        'previewToken'   => $this->mint_token( $post_id ),
       ]
     );
+  }
+
+  /**
+   * Shared secret for the preview token. Defined in wp-config
+   * (NEXTPRESS_PREVIEW_SECRET); the same value lives in the Next .env. The
+   * fallback keeps a fresh install working out of the box — override in prod.
+   */
+  private function preview_secret() {
+    if ( defined( 'NEXTPRESS_PREVIEW_SECRET' ) && NEXTPRESS_PREVIEW_SECRET ) {
+      return NEXTPRESS_PREVIEW_SECRET;
+    }
+    return 'c1492212c32302f323046d9bfb9496980b175da70b0f9004154272e8cbc273be';
+  }
+
+  private function base64url( $bin ) {
+    return rtrim( strtr( base64_encode( $bin ), '+/', '-_' ), '=' );
+  }
+
+  /**
+   * Mint `base64url(payload).base64url(HMAC-SHA256(payload))`.
+   * payload = { uid, post, sid, iat, exp } — signed over the base64url payload
+   * string so the Next side can recompute it from the wire value verbatim.
+   */
+  private function mint_token( $post_id ) {
+    $payload = [
+      'uid'  => get_current_user_id(),
+      'post' => (int) $post_id,
+      'sid'  => wp_generate_uuid4(),
+      'iat'  => time(),
+      'exp'  => time() + 2 * HOUR_IN_SECONDS,
+    ];
+    $payload_b64 = $this->base64url( wp_json_encode( $payload ) );
+    $sig         = hash_hmac( 'sha256', $payload_b64, $this->preview_secret(), true );
+    return $payload_b64 . '.' . $this->base64url( $sig );
   }
 
   private function origin_of( $url ) {

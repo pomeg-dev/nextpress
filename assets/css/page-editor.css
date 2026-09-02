@@ -17,6 +17,30 @@
   --np-accent: #3858e9;
 }
 
+/* ---- Boot loader (zero-flash) ----
+   body.np-editor-booting is added server-side (admin_body_class) so this paints
+   over the native editor from first paint, while the JS builds the shell
+   underneath. The JS adds .np-boot-done to fade it once the canvas has rendered;
+   the fallback animation clears it even if the JS never runs (→ standard editor,
+   since chrome-hiding is JS-side only). */
+@keyframes np-spin { to { transform: rotate(360deg); } }
+@keyframes np-boot-fail { 0%, 92% { opacity: 1; } 100% { opacity: 0; visibility: hidden; } }
+
+body.np-editor-booting::before {
+  content: ""; position: fixed; inset: 0; z-index: 100050; background: #f6f7fb;
+  animation: np-boot-fail 12s linear forwards;
+}
+body.np-editor-booting::after {
+  content: ""; position: fixed; top: 50%; left: 50%; z-index: 100051;
+  width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%;
+  border: 3px solid #d9def0; border-top-color: var(--np-accent);
+  animation: np-spin .8s linear infinite, np-boot-fail 12s linear forwards;
+}
+body.np-editor-booting.np-boot-done::before,
+body.np-editor-booting.np-boot-done::after {
+  animation: none; opacity: 0; pointer-events: none; transition: opacity .35s ease;
+}
+
 /* ---- Hide WP chrome ---- */
 .np-editor-active #wpadminbar,
 .np-editor-active #adminmenumain,
@@ -54,6 +78,14 @@
 .np-editor-active .edit-post-visual-editor__post-title-wrapper,
 .np-editor-active .editor-post-title {
   display: none !important;
+}
+
+/* Keep WP's native "someone is already editing this post" takeover visible and
+   on top — it's our concurrency guard, so our stripped shell must not bury it. */
+.np-editor-active .notification-dialog-wrap,
+.np-editor-active .notification-dialog-background {
+  display: block !important;
+  z-index: 100100 !important;
 }
 
 .np-editor-active .editor-visual-editor,
@@ -121,9 +153,49 @@
 #np-canvas-sizer { position: relative; flex: 0 0 auto; }
 #np-canvas-frame {
   position: absolute; top: 0; left: 0; transform-origin: top left;
-  background: #fff; box-shadow: 0 6px 28px rgba(24, 34, 84, .14); overflow: hidden;
+  box-sizing: border-box; overflow: hidden;
+  transition: background .2s ease, border-radius .2s ease, box-shadow .2s ease;
 }
-#np-preview-iframe { width: 100%; height: 100%; border: 0; display: block; }
+#np-preview-iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+
+/* Device frames (minimal). Padding is set inline by JS (single source = FRAMES);
+   these draw the bezel / rounding / shadow and, for mobile, the speaker + home
+   indicator. The iframe keeps the true device width, so media queries fire. */
+.np-frame--desktop { background: #fff; border-radius: 10px; box-shadow: 0 6px 28px rgba(24, 34, 84, .14); }
+.np-frame--desktop #np-preview-iframe { border-radius: 10px; }
+
+.np-frame--tablet { background: #111827; border-radius: 26px; box-shadow: 0 10px 40px rgba(24, 34, 84, .22); }
+.np-frame--tablet #np-preview-iframe { border-radius: 6px; }
+
+.np-frame--mobile { background: #111827; border-radius: 42px; box-shadow: 0 12px 44px rgba(24, 34, 84, .26); }
+.np-frame--mobile #np-preview-iframe { border-radius: 22px; }
+.np-frame--mobile::before {
+  content: ""; position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+  width: 54px; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .22); z-index: 2;
+}
+.np-frame--mobile::after {
+  content: ""; position: absolute; bottom: 13px; left: 50%; transform: translateX(-50%);
+  width: 34%; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, .30); z-index: 2;
+}
+
+/* ---- Compatibility banner (fail-loud on a missing WP-internal locator) ---- */
+#np-compat-banner {
+  position: fixed; top: var(--np-strip-h); left: 0; right: 0; z-index: 100003;
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  background: #fff8e1; color: #7a5b00; border-bottom: 1px solid #f0d488;
+  font: 13px/1.35 -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+/* Fatal = shell not built (standard editor still shown) → sit below admin bar. */
+#np-compat-banner.is-fatal {
+  top: 32px; background: #fdecec; color: #7a1f1f; border-bottom-color: #f0a3a3;
+}
+#np-compat-banner .np-compat-msg { flex: 1; }
+#np-compat-banner button {
+  background: transparent; border: 1px solid currentColor; border-radius: 6px;
+  padding: 4px 10px; cursor: pointer; color: inherit; font-size: 12px; opacity: .85;
+}
+#np-compat-banner button:hover { opacity: 1; }
+#np-compat-banner .np-compat-dismiss { border: none; font-size: 14px; padding: 4px 7px; }
 
 /* ---- Split resize handle ---- */
 #np-resize-handle {
