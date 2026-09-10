@@ -292,9 +292,15 @@
     })
       .then(function (res) { return res.json(); })
       .then(function (formatted) {
+        // Target our iframe window directly with '*' rather than pinning to
+        // cfg.frontendOrigin: in production the frontend URL often redirects in
+        // the browser (apex→www, *.vercel.app→custom domain, http→https), so the
+        // iframe's live origin won't match the configured one and the message
+        // would be silently dropped. '*' only drops the origin assertion — the
+        // message still goes solely to this iframe's contentWindow.
         iframe.contentWindow.postMessage(
           { type: 'np-blocks', post: cfg.postId, blocks: formatted },
-          cfg.frontendOrigin
+          '*'
         );
       })
       .catch(function (err) { console.error('[np-editor] format failed', err); });
@@ -302,7 +308,7 @@
 
   function scrollCanvasTo(clientId) {
     if (iframe && iframe.contentWindow) {
-      iframe.contentWindow.postMessage({ type: 'np-scroll-to', clientId: clientId }, cfg.frontendOrigin);
+      iframe.contentWindow.postMessage({ type: 'np-scroll-to', clientId: clientId }, '*');
     }
   }
 
@@ -331,7 +337,11 @@
   }
 
   window.addEventListener('message', function (event) {
-    if (event.origin !== cfg.frontendOrigin) return;
+    // Trust by window reference, not origin string: the canvas is the only thing
+    // we ever accept np-* messages from, and its live origin can differ from
+    // cfg.frontendOrigin after a production redirect (see pushBlocks). This also
+    // rejects any third-party script in the admin frame (different event.source).
+    if (!iframe || event.source !== iframe.contentWindow) return;
     var data = event.data || {};
     if (data.type === 'np-ready') {
       lastPayload = '';
