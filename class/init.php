@@ -42,9 +42,16 @@ class Init {
 		new API_Theme( $this->helpers );
 		new API_Editor( $this->helpers );
 
-		// Add user flows.
-		// Removing for now as next-auth is too large for most projects.
-		// new User_Flow( $this->helpers );
+		// Add user flows. Disabled by default (next-auth is too large for most
+		// projects); opt in per-project from the active theme, e.g. functions.php:
+		//   add_filter( 'nextpress_load_user_flow', '__return_true' );
+		// Deferred to after_setup_theme so the theme has registered the filter
+		// (the plugin loads before the theme), but still ahead of rest_api_init.
+		add_action( 'after_setup_theme', function () {
+			if ( apply_filters( 'nextpress_load_user_flow', false ) ) {
+				new User_Flow( $this->helpers );
+			}
+		} );
 
 		// Add extensions
 		new Ext_ACF();
