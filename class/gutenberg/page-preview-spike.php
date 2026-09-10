@@ -33,6 +33,38 @@ class Page_Preview_Spike {
     // it once the canvas has rendered; chrome-hiding stays JS-side so a JS
     // failure degrades to the intact standard editor.
     add_filter( 'admin_body_class', [ $this, 'admin_body_class' ] );
+    // "Edit visually" entry point in the edit.php list-table row actions
+    // (post_row_actions covers posts + custom types, page_row_actions covers pages).
+    add_filter( 'post_row_actions', [ $this, 'row_action' ], 10, 2 );
+    add_filter( 'page_row_actions', [ $this, 'row_action' ], 10, 2 );
+  }
+
+  /**
+   * Add "Edit visually" to a row's hover actions, linking to the live editor.
+   * Gated on page-preview mode + edit capability + a block-editor post type.
+   */
+  public function row_action( $actions, $post ) {
+    if ( ! $this->helpers->is_page_preview_mode() ) {
+      return $actions;
+    }
+    if ( ! current_user_can( 'edit_post', $post->ID ) || 'trash' === $post->post_status ) {
+      return $actions;
+    }
+    if ( function_exists( 'use_block_editor_for_post_type' )
+      && ! use_block_editor_for_post_type( $post->post_type ) ) {
+      return $actions;
+    }
+
+    $url = add_query_arg(
+      [ 'post' => $post->ID, 'action' => 'edit', 'np_spike' => '1' ],
+      admin_url( 'post.php' )
+    );
+    $actions['np_edit_visually'] = sprintf(
+      '<a href="%s">%s</a>',
+      esc_url( $url ),
+      esc_html__( 'Edit visually', 'nextpress' )
+    );
+    return $actions;
   }
 
   public function admin_body_class( $classes ) {

@@ -40,7 +40,10 @@ class URL_Handlers {
 		if ( $redirects_json ) {
 			foreach ( $redirects_json as $redirect ) {
 				if ( $permalink === $redirect['origin'] ) {
-					wp_redirect( $this->helpers->get_frontend_url_public() . '/' . ltrim( $redirect['url'] ), 301 );
+					// ltrim needs the '/' charlist — without it only whitespace is
+					// stripped, so a Yoast target like "/book-a-repair/" keeps its
+					// leading slash and joins to a double slash (…co.uk//book-a-repair/).
+					wp_redirect( $this->helpers->get_frontend_url_public() . '/' . ltrim( $redirect['url'], '/' ), 301 );
 					exit;
 				}
 			}
