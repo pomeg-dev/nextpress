@@ -141,8 +141,9 @@
       document.documentElement.classList.add('np-resizing');
 
       function onMove(ev) {
-        var x = Math.max(320, Math.min(window.innerWidth - 360, ev.clientX));
-        document.documentElement.style.setProperty('--np-edit-w', x + 'px');
+        // Editor pane is on the right, so its width is measured from the right edge.
+        var w = Math.max(320, Math.min(window.innerWidth - 360, window.innerWidth - ev.clientX));
+        document.documentElement.style.setProperty('--np-edit-w', w + 'px');
         applyViewport();
       }
       function onUp() {
