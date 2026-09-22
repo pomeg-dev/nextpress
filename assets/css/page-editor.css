@@ -88,19 +88,6 @@ body.np-editor-booting.np-boot-done::after {
   z-index: 100100 !important;
 }
 
-/* ACF's expanded-editor panel modal must also clear our shell chrome. */
-.np-editor-active .components-modal__screen-overlay.acf-expanded-editor-panel-overlay {
-  z-index: 999999 !important;
-}
-
-/* TinyMCE (ACF WYSIWYG) floating menus — e.g. the Formats dropdown — append to
-   <body> at a low z-index, so they'd open behind the expanded-editor overlay
-   above (and our shell chrome). Lift them above everything. */
-.np-editor-active .mce-floatpanel,
-.np-editor-active .mce-menu {
-  z-index: 1000000 !important;
-}
-
 .np-editor-active .editor-visual-editor,
 .np-editor-active .edit-post-visual-editor { background: #fbfbfc !important; }
 .np-editor-active .editor-styles-wrapper { padding: 14px !important; }
