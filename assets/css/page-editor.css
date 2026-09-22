@@ -201,7 +201,7 @@ body.np-editor-booting.np-boot-done::after {
 #np-resize-handle {
   position: fixed; top: var(--np-strip-h); bottom: 0;
   right: var(--np-edit-w); width: 9px; margin-right: -4px;
-  z-index: 100002; cursor: col-resize;
+  z-index: 100000; cursor: col-resize;
   display: flex; align-items: center; justify-content: center;
 }
 #np-resize-handle::before {
