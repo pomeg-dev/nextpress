@@ -88,6 +88,11 @@ body.np-editor-booting.np-boot-done::after {
   z-index: 100100 !important;
 }
 
+/* ACF's expanded-editor panel modal must also clear our shell chrome. */
+.np-editor-active .components-modal__screen-overlay.acf-expanded-editor-panel-overlay {
+  z-index: 999999 !important;
+}
+
 .np-editor-active .editor-visual-editor,
 .np-editor-active .edit-post-visual-editor { background: #fbfbfc !important; }
 .np-editor-active .editor-styles-wrapper { padding: 14px !important; }
