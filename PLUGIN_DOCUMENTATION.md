@@ -1,9 +1,9 @@
 # Nextpress Plugin - Technical Documentation
 
-**Version:** 2.02
+**Version:** 3.0
 **Namespace:** `nextpress`
 **Author:** Pomegranate
-**Last audited:** 2026-05-29
+**Last audited:** 2026-09-30
 
 ---
 
@@ -22,10 +22,6 @@
 11. [Caching Architecture](#11-caching-architecture)
 12. [Data Flow Diagrams](#12-data-flow-diagrams)
 13. [Filter & Action Reference](#13-filter--action-reference)
-14. [Security Audit](#14-security-audit)
-15. [Performance Audit](#15-performance-audit)
-16. [OOP & Architecture Audit](#16-oop--architecture-audit)
-17. [Recommendations](#17-recommendations)
 
 ---
 
@@ -39,7 +35,8 @@ Nextpress is a WordPress plugin that transforms WordPress into a **headless CMS*
 - Handles URL redirects from WordPress frontend to Next.js, including preview links and draft mode
 - Integrates with ACF, Yoast SEO, Gravity Forms, and Polylang
 - Implements a Redis-aware caching layer with circuit breakers and rate limiting
-- Includes a disabled JWT-based user authentication flow
+- Provides an experimental live full-page preview ("page-preview") that renders the whole page in a Next.js canvas from inside the editor, with a `/format` endpoint and an admin compatibility check
+- Includes an opt-in (filter-gated) JWT-based user authentication flow
 
 ---
 
@@ -89,25 +86,34 @@ nextpress/
 │   │   ├── api-settings.php   # /settings endpoint
 │   │   ├── api-menus.php      # /menus endpoint
 │   │   ├── api-theme.php      # /theme, /block_theme endpoints
+│   │   ├── api-editor.php     # /format endpoint (live page-preview, editors only)
 │   │   └── post-formatter.php # Post_Formatter - transforms WP_Post → JSON
 │   ├── admin/
 │   │   ├── register-pages.php      # ACF options pages (Settings, Templates)
 │   │   ├── register-settings.php   # ACF field groups for settings
 │   │   ├── register-templates.php  # ACF flexible content templates
+│   │   ├── register-editor.php     # "Editor" options page (mode + frontend compat check)
 │   │   ├── fix-autoload-transients.php  # Admin tool for DB cleanup
 │   │   └── url-handlers.php        # Frontend redirects + preview links
 │   ├── gutenberg/
 │   │   ├── register-blocks.php     # Dynamic ACF block registration + preview render
+│   │   ├── page-preview-spike.php  # SPIKE: live full-page canvas bridge (?np_spike=1)
 │   │   └── field-builder.php       # Maps API field definitions → ACF fields
 │   ├── extensions/
 │   │   ├── ext-acf.php             # ACF data enrichment + media reduction
 │   │   ├── ext-yoast.php           # Yoast SEO meta + redirect handling
 │   │   └── ext-gravityforms.php    # Gravity Forms data injection
 │   └── user-flow/
-│       └── user-flow.php           # JWT auth (DISABLED in Init)
+│       └── user-flow.php           # JWT auth (opt-in via nextpress_load_user_flow filter)
 ├── assets/
-│   ├── js/block-preview.js    # Editor iframe preview manager
-│   └── css/block-preview.css  # Preview loading styles
+│   ├── js/
+│   │   ├── block-preview.js        # Editor iframe preview manager (legacy per-block)
+│   │   ├── page-editor-entry.js    # "Edit visually" entry button (page-preview mode)
+│   │   └── page-preview-spike.js   # SPIKE: live canvas bridge editor
+│   └── css/
+│       ├── block-preview.css       # Preview loading styles
+│       ├── page-editor.css         # Live editor shell styles
+│       └── page-editor-blocks.css  # In-canvas block label styles
 └── includes/
     ├── php-jwt/               # Firebase JWT library (vendored)
     ├── plugin-update-checker/ # GitHub-based auto-update (vendored)
@@ -120,7 +126,7 @@ nextpress/
 
 ### Autoloader (`nextpress.php:26-57`)
 
-Uses a **static classmap** rather than filesystem scanning. All 18 plugin classes are mapped explicitly:
+Uses a **static classmap** rather than filesystem scanning. All 22 plugin classes are mapped explicitly:
 
 ```php
 static $class_map = [
@@ -141,17 +147,26 @@ Key: `strtolower($class)` ensures case-insensitive resolution.
 4. new Register_Pages()      → ACF options pages
 5. new Register_Settings()   → ACF field groups (fetches blocks API here!)
 6. new Register_Templates()  → Flexible content templates
-7. new Fix_Autoload_Transients()
-8. new API_Router()          → /router endpoint
-9. new API_Settings()        → /settings endpoint
-10. new API_Posts()           → /posts endpoint
-11. new API_Menus()           → /menus endpoint
-12. new API_Theme()           → /theme endpoint
-13. new Ext_ACF()
-14. new Ext_Yoast()
-15. new Ext_GravityForms()
-16. new Register_Blocks()     → Dynamic block registration
-17. new URL_Handlers()        → Frontend redirects
+7. new Register_Editor()     → "Editor" options page (mode + compat check)
+8. new Fix_Autoload_Transients()
+9. new API_Router()          → /router endpoint
+10. new API_Settings()        → /settings endpoint
+11. new API_Posts()           → /posts endpoint
+12. new API_Menus()           → /menus endpoint
+13. new API_Theme()           → /theme endpoint
+14. new API_Editor()          → /format endpoint (live page-preview)
+15. after_setup_theme hook    → new User_Flow() IF nextpress_load_user_flow filter is true (default false)
+16. new Ext_ACF()
+17. new Ext_Yoast()
+18. new Ext_GravityForms()
+19. new Register_Blocks()     → Dynamic block registration
+20. new Page_Preview_Spike()  → SPIKE live canvas bridge (only active with ?np_spike=1)
+21. new URL_Handlers()        → Frontend redirects
+```
+
+**User flow gating:** Unlike the rest of the wiring (which runs immediately in `Init::__construct`), `User_Flow` is instantiated inside an `after_setup_theme` callback and only when `apply_filters( 'nextpress_load_user_flow', false )` returns true. This defers instantiation until the active theme has had a chance to register the filter (the plugin loads before the theme), while staying ahead of `rest_api_init`. Opt in from the theme, e.g. `functions.php`:
+```php
+add_filter( 'nextpress_load_user_flow', '__return_true' );
 ```
 
 **Critical note:** `Register_Settings` calls `fetch_blocks_from_api()` in its constructor (during `__construct` → `build_settings()`), which makes an HTTP request to the Next.js frontend on every admin page load where ACF initialises. This is mitigated by caching (12-hour TTL) and the circuit breaker.
@@ -166,8 +181,10 @@ The central service object. Responsibilities:
 
 | Responsibility | Methods |
 |---|---|
-| **Frontend URL resolution** | `get_frontend_url()`, `get_docker_url()`, `get_frontend_url_public()` |
+| **Frontend URL resolution** | `get_frontend_url()`, `get_docker_url()`, `get_frontend_url_public()`, `get_frontend_url_internal()` |
 | **API URL construction** | `get_api_url()`, `get_blocks_url()` |
+| **Page-preview mode** | `page_editor_mode()`, `is_page_preview_mode()` |
+| **Preview tokens** | `preview_secret()`, `preview_secret_is_default()`, `mint_preview_token($post_id)` |
 | **Block fetching** | `fetch_blocks_from_api($theme, $source)` |
 | **Cache delegation** | `cache_set()`, `cache_get()`, `cache_delete()`, `cache_flush_group()` |
 | **Next.js revalidation** | `revalidate_fetch_route($tag)`, `revalidate_specific_path($path)` |
@@ -187,6 +204,10 @@ The central service object. Responsibilities:
 - Rate limited to 3 requests per 30 seconds
 - After 3 consecutive failures, circuit breaker activates for 300 seconds
 - Blocks response cached for 12 hours (filterable via `nextpress_blocks_cache_ttl`)
+
+**Internal vs public frontend URL:** `get_frontend_url_internal()` returns the server-reachable URL (`host.docker.internal` in Docker, the real domain in prod) for `wp_remote_*` calls; `get_frontend_url_public()` returns the browser-facing URL (localhost in dev) for iframes and redirects.
+
+**Page-preview mode & tokens:** `page_editor_mode()` reads the ACF `page_editor_mode` option (`legacy` default, or `page_preview`); a `nextpress_live_editor_available` filter returning false forces legacy (licensing hook). `mint_preview_token($post_id)` produces a stateless `base64url(payload).base64url(HMAC-SHA256(payload))` token (payload `{ uid, post, sid, iat, exp }`, 2-hour expiry) signed with `preview_secret()` — the `NEXTPRESS_PREVIEW_SECRET` constant, falling back to a shipped default (`preview_secret_is_default()` surfaces a prod nudge). The Next.js side recomputes the signature to authorise live renders.
 
 ### Cache (`class/cache.php`)
 
@@ -244,7 +265,7 @@ Transforms `WP_Post` objects into the JSON structure consumed by Next.js:
 
 ## 6. REST API Layer
 
-All routes registered under the `nextpress` namespace. **All endpoints use `permission_callback => '__return_true'`** (public, unauthenticated access).
+All routes registered under the `nextpress` namespace. **All content endpoints use `permission_callback => '__return_true'`** (public, unauthenticated access). The exception is `/format`, which requires the `edit_posts` capability, plus the opt-in user-flow endpoints (see §10).
 
 ### Route Map
 
@@ -259,7 +280,10 @@ All routes registered under the `nextpress` namespace. **All endpoints use `perm
 | `/nextpress/menus/{location}` | GET | `API_Menus` | Menu by location |
 | `/nextpress/theme` | GET | `API_Theme` | theme.json contents |
 | `/nextpress/block_theme` | GET | `API_Theme` | Selected block themes |
+| `/nextpress/format` | POST | `API_Editor` | Format serialized editor block markup (requires `edit_posts`) |
 | `/nextpress/form/{form_id}` | GET | `Ext_GravityForms` | Gravity Forms form data |
+
+> The user-flow module adds `/login`, `/logout`, `/register`, `/request-reset`, and `/reset-password` when enabled — see §10.
 
 ### API_Router (`/router`)
 
@@ -318,6 +342,10 @@ Returns menus formatted as:
 - `/theme` → reads and returns `theme.json` from the active WordPress theme directory via `file_get_contents()`
 - `/block_theme` → returns the ACF `blocks_theme` option field
 
+### API_Editor (`/format`) — live page-preview
+
+Part of the experimental page-preview feature. **`POST /nextpress/format`** accepts `{ content: "<serialized block markup>" }` — the editor bridge sends `wp.blocks.serialize( getBlocks() )`, i.e. the exact `post_content` a save would produce. It runs that through `Post_Formatter::parse_block_data()` — the **same pipeline** `/router` uses for live pages — so preview output (including nested innerBlocks and reusable-block refs) matches production with no hand-rolled serialization. Returns a `WP_REST_Response` of the formatted block tree (empty array for empty input). Restricted to users with `edit_posts`; the bridge sends the standard `wp_rest` nonce.
+
 ---
 
 ## 7. Admin Layer
@@ -353,6 +381,15 @@ Builds ACF flexible content templates for before/after/sidebar content areas:
 - **Polylang support:** Duplicate fields for each non-default language
 
 Block layouts are populated from `fetch_blocks_from_api()` and built using `Field_Builder`.
+
+### Register_Editor
+
+Registers the **Editor** ACF options page (`admin.php?page=editor`) on the `acf/init` hook. Two fields:
+
+- **`page_editor_mode`** (select): `legacy` (default — classic per-block iframe previews) or `page_preview` (experimental live canvas + "Edit visually"). Read back via `Helpers::page_editor_mode()`.
+- **`page_editor_compat`** (message): a live compatibility banner against the Next.js frontend.
+
+The compat check (`run_compat_check()`) is only computed when actually rendering the Editor page (not on every admin load), and its result is cached in the `nextpress_live_editor_compat` transient for 5 minutes (`?np_recheck=1` busts it). It mints a preview token and `wp_remote_get`s `{internal_frontend_url}/page-preview/health?np_token=...` (5s timeout), distinguishing the real-world failure modes: **unreachable** (frontend down / wrong URL), **missing** (200 route absent — old build without the feature), **secret_mismatch** (token rejected — `NEXTPRESS_PREVIEW_SECRET` differs between WP and Next), **unknown**, and **ready**. When `preview_secret_is_default()` is true it also renders a "set a unique secret before production" nudge.
 
 ### Fix_Autoload_Transients
 
@@ -419,6 +456,17 @@ Maps Next.js block field definitions to ACF field types. Supports 25+ field type
 
 Recursive for nested repeaters, groups, and flexible content layouts.
 
+### Page_Preview_Spike (experimental)
+
+> **SPIKE / proof-of-concept.** A bridge between the native Gutenberg editor and a Next.js full-page live canvas. Off by default; requires `page_editor_mode = page_preview` **and** the `?np_spike=1` query param on the editor URL. It piggybacks on the real `post.php` editor, so ACF forms, the block-editor store, and native save are all untouched — a JS failure degrades to the standard editor intact.
+
+What it does:
+1. **"Edit visually" row action** — adds a link to `post.php?post={id}&action=edit&np_spike=1` in the posts/pages list tables (`post_row_actions` / `page_row_actions`), gated on page-preview mode, `edit_post` capability, non-trashed status, and a block-editor post type.
+2. **Boot loader** — server-side `np-editor-booting` admin body class paints a loading shell from first paint so the native editor never flashes; JS fades it once the canvas renders.
+3. **Editor bridge (`page-preview-spike.js`)** — reads blocks reactively from `core/block-editor` (`wp.data`), POSTs them to `/wp-json/nextpress/format`, and `postMessage`s the formatted result to the Next.js canvas; a click on the canvas calls `selectBlock()` so the matching native ACF form shows.
+4. **Assets** — enqueues `page-preview-spike.js` + `page-editor.css` (spike view) and, in page-preview mode generally, `page-editor-entry.js` (the entry button) and `page-editor-blocks.css` (in-canvas block labels, loaded via `enqueue_block_assets` so it reaches inside the editor-canvas iframe).
+5. **Localised data (`NP_PREVIEW`)** — `postId`, public frontend URL + origin, the `/nextpress/format` REST URL, a `wp_rest` nonce, and a freshly minted `previewToken` (see `Helpers::mint_preview_token()`); `sid` in the token isolates concurrent editor sessions on the same post.
+
 ---
 
 ## 9. Extension System
@@ -449,11 +497,15 @@ Extensions hook into the `nextpress_post_object`, `nextpress_block_data`, and ot
 
 ---
 
-## 10. User Flow Module (Disabled)
+## 10. User Flow Module (Opt-in)
 
-Currently commented out in `Init`: `// new User_Flow( $this->helpers );`
+Disabled by default (next-auth is too heavy for most projects). `Init` instantiates `User_Flow` on `after_setup_theme` only when the `nextpress_load_user_flow` filter returns true — opt in from the active theme:
 
-When enabled, provides JWT-based authentication:
+```php
+add_filter( 'nextpress_load_user_flow', '__return_true' );
+```
+
+When enabled, provides JWT-based authentication (all routes under the `nextpress` namespace, `permission_callback => '__return_true'`):
 
 | Endpoint | Method | Description |
 |---|---|---|
@@ -583,6 +635,8 @@ Register_Blocks::register_nextpress_blocks()
 | `nextpress_theme_json` | API_Theme | Modify theme.json output |
 | `np_block_theme` | API_Theme | Modify block theme response |
 | `nextpress_blocks_cache_ttl` | Helpers | Block cache duration |
+| `nextpress_live_editor_available` | Helpers | Force legacy editor mode (licensing hook); return false to disable page-preview |
+| `nextpress_load_user_flow` | Init | Enable the opt-in JWT user-flow module (default false) |
 | `nextpress_enable_query_monitoring` | Helpers | Enable slow query logging |
 | `nextpress_slow_query_threshold` | Helpers | Slow query threshold (default: 1.0s) |
 
@@ -594,154 +648,16 @@ Register_Blocks::register_nextpress_blocks()
 
 ---
 
-## 14. Security Audit
-
-### CRITICAL Issues
-
-| ID | Severity | File | Line(s) | Issue | Description |
-|---|---|---|---|---|---|
-| S1 | **CRITICAL** | `api-settings.php` | 180-185 | **Yoast settings data leak** | `add_yoast_base_to_nextpress_settings()` calls `WPSEO_Options::get_all()` and merges ALL Yoast settings into the public API response. This can expose internal configuration, API keys, or sensitive metadata. Should filter to only safe Yoast keys. |
-| S2 | **HIGH** | `url-handlers.php` | 60-64 | **Hardcoded draft secret** | Preview/draft URLs use literal `<token>` as the secret: `/api/draft?secret=<token>&id=...`. This is either a placeholder never replaced (broken draft mode) or the actual secret is leaked. Should use a real secret stored as a WP option or constant. |
-| S3 | **HIGH** | `user-flow.php` | 248 | **JWT secret dependency** | `JWT_AUTH_SECRET_KEY` constant must exist but is never defined by the plugin. If undefined, JWT operations will fatal error. No validation or helpful error message. |
-| S4 | **MEDIUM** | `user-flow.php` | 197 | **Password sanitisation** | `sanitize_text_field()` on passwords strips characters, potentially preventing users from using special characters in passwords. Should use raw input for `wp_signon()`. |
-| S5 | **MEDIUM** | `user-flow.php` | 383-406 | **JWT in query string** | Login redirect passes JWT tokens via URL query parameters (`?token=...`), which are logged in server access logs, browser history, and referrer headers. |
-| S6 | **MEDIUM** | `api-posts.php` | 221-265 | **Unrestricted WP_Query params** | `prepare_query_args()` passes nearly all request parameters directly to `WP_Query`. While `post_status` defaults to `publish`, a caller can pass `post_status=private` or `post_status=draft` to access non-public content. |
-| S7 | **LOW** | `helpers.php` | 311 | **Cache clear via GET** | `?clear` query param triggers full cache flush. Protected by `manage_options` capability check, but should ideally use POST + nonce for destructive actions. |
-| S8 | **LOW** | `ext-acf.php` | 214-215 | **Deprecated function** | `libxml_disable_entity_loader()` is deprecated in PHP 8.0+ and will emit warnings. The XXE protection intent is correct but needs a PHP version check. |
-| S9 | **LOW** | `helpers.php` | 335 | **Debug queries via GET** | `?nextpress_debug_queries=1` enables query monitoring and adds timing headers. Protected by `manage_options` but could leak performance data. |
-
-### Positive Security Patterns
-
-- Safe option allowlist in `API_Settings::get_safe_option_keys()` - good defence against option enumeration
-- Nonce verification in `Fix_Autoload_Transients`
-- Taxonomy/term values sanitised with `sanitize_text_field()`
-- XXE protection attempt in SVG parsing
-- Circuit breaker prevents unlimited outbound requests
-- Direct DB queries use `$wpdb->prepare()` consistently
-- `ABSPATH` check on every file
-
----
-
-## 15. Performance Audit
-
-### Issues
-
-| ID | Severity | File | Line(s) | Issue | Description |
-|---|---|---|---|---|---|
-| P1 | **HIGH** | `register-settings.php` | 46 | **HTTP request in constructor** | `build_settings()` calls `fetch_blocks_from_api()` during class construction. On cache miss, this blocks the admin page load with a 20-second timeout HTTP request. Should be deferred to the `acf/init` hook. |
-| P2 | **HIGH** | `api-router.php` | 148 | **Full group flush on every save** | `invalidate_router_cache()` calls `cache_flush_group('nextpress_router')` which deletes ALL router cache entries on every post save. With many cached routes, this causes a thundering herd on the next requests. |
-| P3 | **HIGH** | `api-posts.php` | 378 | **Full group flush on every save** | Same issue - `invalidate_posts_cache()` flushes the entire `nextpress_posts` cache group on every post save. |
-| P4 | **MEDIUM** | `post-formatter.php` | 309-327 | **N+1 on custom taxonomies** | `include_tax_terms()` calls `get_the_terms()` for every custom taxonomy on every post. When formatting lists of posts, this can generate dozens of DB queries. The bulk-load in `API_Posts` only covers object taxonomies for the specific post types in the result set. |
-| P5 | **MEDIUM** | `post-formatter.php` | 351-379 | **Breadcrumb DB queries** | `include_breadcrumbs()` traverses the full parent chain with individual `get_post()` calls per ancestor. For deeply nested pages, this generates N additional queries. |
-| P6 | **MEDIUM** | `register-blocks.php` | 175-186 | **Duplicate category registration** | `block_categories_all` filter is added inside a `foreach` loop, meaning it runs once per block. Each invocation appends the same theme category, creating duplicates (though WP may deduplicate). |
-| P7 | **MEDIUM** | `register-blocks.php` | 607 | **Deprecated `mt_srand`** | `mt_srand()` + `mt_rand()` are being used to seed icon selection. This modifies global PRNG state, which could affect other code using `mt_rand()`. |
-| P8 | **LOW** | `post-formatter.php` | 98-107 | **Duplicate image URL calls** | `get_post_image()` fetches `full` and `thumbnail` sizes, then `include_featured_image()` fetches `full`, `thumbnail`, `medium`, and `large` again for the same thumbnail ID. These are cached by WP's metadata cache but the data structure is redundant. |
-| P9 | **LOW** | `api-theme.php` | 50 | **file_get_contents on every request** | `get_theme_json()` reads theme.json from disk on every API call. Should be cached. |
-
-### Positive Performance Patterns
-
-- N+1 prevention with `update_meta_cache()` and `update_object_term_cache()` in API_Posts
-- `no_found_rows` and disabled meta/term cache for `slug_only` mode
-- Redis-aware caching with transient fallback
-- Circuit breaker prevents cascading failures
-- `autoload='no'` enforcement for transients
-- Query monitoring infrastructure with configurable slow query threshold
-- Unbounded query cap (150 default)
-
----
-
-## 16. OOP & Architecture Audit
-
-### Issues
-
-| ID | Severity | Issue | Description |
-|---|---|---|---|
-| A1 | **HIGH** | **No interfaces or contracts** | Zero interfaces in the entire codebase. `Helpers` is injected everywhere but has no interface, making it impossible to mock for testing or swap implementations. |
-| A2 | **HIGH** | **God object: Helpers** | `Helpers` handles URLs, caching, revalidation, Polylang, homepage lookup, save guards, cache clearing, and query monitoring. Should be split into focused services. |
-| A3 | **HIGH** | **No dependency injection container** | All wiring is manual in `Init::__construct()`. Adding/removing modules requires editing `Init`. No way to conditionally load modules. |
-| A4 | **MEDIUM** | **Public properties everywhere** | Nearly every class property is `public` (e.g., `$helpers`, `$formatter`, `$settings`, `$templates`). Should be `private` or `protected` with accessors only where needed. |
-| A5 | **MEDIUM** | **Multiple Post_Formatter instances** | `API_Router`, `API_Posts`, `API_Settings`, and `Register_Blocks` each create their own `new Post_Formatter()`. Should be a shared singleton or injected. |
-| A6 | **MEDIUM** | **Constructor side effects** | Most constructors immediately hook into WordPress actions/filters. This makes classes impossible to instantiate without triggering side effects, complicating testing. |
-| A7 | **MEDIUM** | **Mixed responsibilities in Post_Formatter** | Handles post formatting, block parsing, flexible content formatting, breadcrumb generation, slug resolution, and revision handling. Should be decomposed. |
-| A8 | **MEDIUM** | **Inconsistent error handling** | Some methods return `false`, some return empty arrays, some return `null`, some return `WP_Error`. No consistent error handling strategy. |
-| A9 | **LOW** | **No type hints** | No parameter types, return types, or PHPDoc `@param`/`@return` annotations on most methods. PHP 7.4+ type hints should be used. |
-| A10 | **LOW** | **`WP_Error` without namespace** | `api-menus.php:69,84` uses `WP_Error` without leading backslash in a namespaced context. This will throw a fatal error when a menu location is not found. Should be `\WP_Error`. |
-| A11 | **LOW** | **Vendored dependencies** | `php-jwt`, `plugin-update-checker`, and `acf-builder` are vendored directly. No Composer autoload. Version management and updates require manual replacement. |
-| A12 | **LOW** | **Global function** | `np_dumper()` is a free function in the `nextpress` namespace. Should be a static method or removed for production. |
-
-### Positive OOP Patterns
-
-- Clean namespace usage (`nextpress\*`)
-- Static classmap autoloader (fast, no filesystem scanning)
-- Dependency injection via constructors (even if inconsistent)
-- Single responsibility at the class level (mostly)
-- Good use of WordPress filter/action system for extensibility
-- Cache service extracted into its own class
-
----
-
-## 17. Recommendations
-
-### Priority 1 - Security Fixes (Do Now)
-
-1. **Fix Yoast data leak (S1):** Filter `WPSEO_Options::get_all()` to only include safe, public-facing keys (title templates, social URLs, etc.), similar to the `get_safe_option_keys()` pattern.
-
-2. **Fix draft secret (S2):** Replace `<token>` in `url-handlers.php` with a real secret. Add a setting field or use `wp_generate_password()` stored as an option.
-
-3. **Fix WP_Query parameter injection (S6):** Add an allowlist of acceptable `post_status` values in `prepare_query_args()`:
-   ```php
-   $allowed_statuses = ['publish'];
-   if (current_user_can('edit_posts')) {
-       $allowed_statuses = array_merge($allowed_statuses, ['draft', 'pending', 'private']);
-   }
-   ```
-
-4. **Fix `\WP_Error` namespace (A10):** Add leading backslash to `WP_Error` in `api-menus.php:69,84`.
-
-### Priority 2 - Performance Fixes (This Sprint)
-
-5. **Defer settings block fetch (P1):** Move `build_settings()` call from constructor to `acf/init` callback, or lazy-load when the settings page is actually rendered.
-
-6. **Targeted cache invalidation (P2, P3):** Instead of flushing entire cache groups, invalidate only the specific cache keys affected by the changed post. The post's URL, post type, and taxonomy terms are enough to compute the affected keys.
-
-7. **Cache theme.json (P9):** Add transient caching to `get_theme_json()`.
-
-### Priority 3 - Architecture Improvements (Next Quarter)
-
-8. **Introduce interfaces:** Create `CacheInterface`, `FormatterInterface`, `RevalidatorInterface`. This enables testing and alternative implementations.
-
-9. **Split Helpers:** Extract into:
-   - `URLResolver` (frontend URL logic)
-   - `Cache` (already partially done)
-   - `Revalidator` (Next.js revalidation)
-   - `LanguageService` (Polylang integration)
-
-10. **Visibility modifiers:** Change all `public` properties to `private`/`protected`. Ensure `$helpers`, `$formatter`, etc. are not accessed externally.
-
-11. **Shared Post_Formatter:** Inject a single instance through the DI chain rather than creating new instances in every API class.
-
-12. **Type hints:** Add PHP 7.4+ parameter and return types to all methods progressively.
-
-### Priority 4 - Housekeeping
-
-13. **Remove `np_dumper()`:** Replace with proper logging or WP_CLI output.
-
-14. **PHP 8.0 compatibility:** Guard `libxml_disable_entity_loader()` with `PHP_VERSION_ID < 80000`.
-
-15. **Add phpstan/psalm:** Static analysis would catch the `WP_Error` namespace bug and other type issues automatically.
-
-16. **Composer migration:** Replace vendored libraries with Composer dependencies for easier updates and autoloading.
-
----
-
 ## Appendix: Quick Reference
 
 ### Constants
 
 | Constant | Value | Source |
 |---|---|---|
-| `NEXTPRESS_PATH` | Plugin directory path (no trailing slash) | `nextpress.php` |
-| `NEXTPRESS_URI` | Plugin URL | `nextpress.php` |
+| `NEXTPRESS_PATH` | Plugin directory path (no trailing slash) | `nextpress.php` (defined) |
+| `NEXTPRESS_URI` | Plugin URL | `nextpress.php` (defined) |
+| `NEXTPRESS_PREVIEW_SECRET` | Shared HMAC secret for live-preview tokens; mirror in the Next.js `.env`. Falls back to a shipped default — override in production | user-defined (wp-config.php) |
+| `JWT_AUTH_SECRET_KEY` | Signing key for the opt-in user-flow JWTs | user-defined (wp-config.php) |
 
 ### WP Options Used
 
@@ -753,6 +669,7 @@ Register_Blocks::register_nextpress_blocks()
 | `wpseo-premium-redirects-base` | Yoast premium redirects |
 | `blocks_theme` (ACF) | Selected block themes |
 | `frontend_url` (ACF) | Frontend URL |
+| `page_editor_mode` (ACF) | Editor mode: `legacy` or `page_preview` |
 
 ### Cache Keys Pattern
 
@@ -766,3 +683,4 @@ Register_Blocks::register_nextpress_blocks()
 - `blocks_api_circuit_breaker_{url_hash}`
 - `blocks_api_failures_{url_hash}`
 - `np_cache_tags`
+- `nextpress_live_editor_compat` (transient, 5 min — Editor page frontend compat check)

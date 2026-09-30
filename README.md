@@ -4,7 +4,7 @@
 
 It exposes WordPress content as structured, Next.js-friendly JSON over a set of custom REST endpoints, dynamically registers ACF Gutenberg blocks from your Next.js app, renders live block previews inside the WordPress editor via the frontend, and handles redirects, draft/preview links, and cache revalidation between WordPress and Next.js.
 
-- **Version:** 2.02
+- **Version:** 3.0
 - **Namespace:** `nextpress`
 - **Author:** [Pomegranate](https://pomegranate.co.uk)
 

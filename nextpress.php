@@ -4,7 +4,7 @@
  * Plugin URI: https://pomegranate.co.uk
  * Description: Nextpress is a WordPress plugin that allows you to use Next.js with WordPress as a headless CMS.
  * Author: Pomegranate
- * Version: 2.02
+ * Version: 3.0
  * Text Domain: nextpress
  * @package nextpress
  */
