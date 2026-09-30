@@ -22,9 +22,9 @@ define( 'NEXTPRESS_URI', plugins_url( plugin_basename( __DIR__ ) ) );
  * 'spl_autoload_register' callback function.
  * Resolves classes via a static classmap — no filesystem scanning on every load.
  *
- * @param string $class Fully-qualified class name.
+ * @param string $class_name Fully-qualified class name.
  */
-function autoloader( $class ) {
+function autoloader( $class_name ) {
 	static $class_map = [
 		'nextpress\\init'                    => '/class/init.php',
 		'nextpress\\helpers'                 => '/class/helpers.php',
@@ -51,7 +51,7 @@ function autoloader( $class ) {
 		'nextpress\\user_flow'               => '/class/user-flow/user-flow.php',
 	];
 
-	$key = strtolower( $class );
+	$key = strtolower( $class_name );
 	if ( isset( $class_map[ $key ] ) ) {
 		include_once __DIR__ . $class_map[ $key ];
 		return true;
