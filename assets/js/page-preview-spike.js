@@ -293,12 +293,16 @@
     })
       .then(function (res) { return res.json(); })
       .then(function (formatted) {
-        // Target our iframe window directly with '*' rather than pinning to
-        // cfg.frontendOrigin: in production the frontend URL often redirects in
-        // the browser (apex→www, *.vercel.app→custom domain, http→https), so the
-        // iframe's live origin won't match the configured one and the message
-        // would be silently dropped. '*' only drops the origin assertion — the
-        // message still goes solely to this iframe's contentWindow.
+        // targetOrigin is '*' by deliberate trade-off. We can't pin to
+        // cfg.frontendOrigin: in production the frontend URL redirects in the
+        // browser (apex→www, *.vercel.app→custom domain, http→https) and the
+        // iframe's post-redirect origin is cross-origin-unreadable, so a pinned
+        // origin would silently drop every message. Security note: '*' means any
+        // document that happens to occupy this iframe could read the payload — but
+        // the message targets only this specific contentWindow, and the payload is
+        // just the post ID + formatted block markup (no nonce, token, or secret;
+        // those stay server-side / in NP_PREVIEW). If a secret ever needs sending,
+        // pin the origin instead of using '*'.
         iframe.contentWindow.postMessage(
           { type: 'np-blocks', post: cfg.postId, blocks: formatted },
           '*'
@@ -309,6 +313,8 @@
 
   function scrollCanvasTo(clientId) {
     if (iframe && iframe.contentWindow) {
+      // '*' for the same reason as pushBlocks (post-redirect origin unreadable);
+      // payload is just a block clientId, no secret.
       iframe.contentWindow.postMessage({ type: 'np-scroll-to', clientId: clientId }, '*');
     }
   }
