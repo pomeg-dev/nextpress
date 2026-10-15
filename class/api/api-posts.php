@@ -183,12 +183,17 @@ class API_Posts {
   public function get_tax_terms( $request ) {
     $taxonomy = $request->get_param( 'taxonomy' );
     $hide_empty = $request->get_param( 'hide_empty' );
-    $terms = get_terms(
-      [
-        'taxonomy' => $taxonomy,
-        'hide_empty' => $hide_empty || false,
-      ]
-    );
+    $lang = $request->get_param( 'lang' );
+    $params = [
+      'taxonomy' => $taxonomy,
+      'hide_empty' => $hide_empty || false,
+    ];
+
+    if ( isset( $lang ) && ! empty( $lang ) ) {
+      $params['lang'] = $lang;
+    }
+
+    $terms = get_terms( $params );
 
     $term_list = [];
     if ( $terms && ! is_wp_error( $terms ) ) {
