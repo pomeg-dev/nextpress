@@ -31,6 +31,34 @@ class Register_Templates {
     $this->helpers = $helpers;
     $this->field_builder = new Field_Builder();
     add_action( 'wp_loaded', [ $this, 'setup_templates' ] );
+    add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+  }
+
+  /**
+   * Enqueue the "copy/move flexible-content layouts between sections" UI,
+   * scoped to the Templates options page.
+   */
+  public function enqueue_assets() {
+    $is_templates_page = (
+      isset( $_GET['page'] ) && $_GET['page'] === 'templates' // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+    );
+    if ( ! $is_templates_page ) {
+      return;
+    }
+
+    wp_enqueue_script(
+      'nextpress-acf-flexible-copy',
+      NEXTPRESS_URI . '/assets/js/acf-flexible-copy.js',
+      [ 'jquery', 'acf-input' ],
+      filemtime( NEXTPRESS_PATH . '/assets/js/acf-flexible-copy.js' ),
+      true
+    );
+    wp_enqueue_style(
+      'nextpress-acf-flexible-copy',
+      NEXTPRESS_URI . '/assets/css/acf-flexible-copy.css',
+      [],
+      filemtime( NEXTPRESS_PATH . '/assets/css/acf-flexible-copy.css' )
+    );
   }
 
   /**
