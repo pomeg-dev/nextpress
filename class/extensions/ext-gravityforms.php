@@ -58,7 +58,7 @@ class Ext_GravityForms {
       $keys = array_keys( $block_data );
       foreach ( $keys as $key ) {
         if ( strpos( $key, 'gravity' ) !== false && strpos( $key, 'form' ) !== false ) {
-          $data_key = "${key}_data";
+          $data_key = "{$key}_data";
           $block_data[ $data_key ] = \GFAPI::get_form( str_replace( 'form_id_', '', $block_data[ $key ] ) );
           return $block_data;
         }
@@ -82,7 +82,7 @@ class Ext_GravityForms {
       $keys = array_keys( $post['acf_data'] );
       foreach ( $keys as $key ) {
         if ( strpos( $key, 'gravity' ) !== false && strpos( $key, 'form' ) !== false ) {
-          $data_key = "${key}_data";
+          $data_key = "{$key}_data";
           $post['acf_data'][ $data_key ] = \GFAPI::get_form( str_replace( 'form_id_', '', $post['acf_data'][ $key ] ) );
           return $post;
         }
