@@ -247,8 +247,9 @@ class API_Settings {
 		$this->helpers->cache_delete( $cache_key, 'nextpress_settings' );
 		$this->helpers->cache_delete( $acf_cache_key, 'nextpress_settings' );
 
-		// Revalidate nextjs.
-		if ( $menu_slug === 'templates' ) {
+		// Revalidate nextjs. Matches the Templates landing page and every
+		// per-post-type sub-page ("templates", "templates-page", …).
+		if ( $menu_slug === 'templates' || strpos( (string) $menu_slug, 'templates-' ) === 0 ) {
 			$this->helpers->revalidate_fetch_route( 'before_content' );
 			$this->helpers->revalidate_fetch_route( 'after_content' );
 

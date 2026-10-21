@@ -11,7 +11,10 @@ defined('ABSPATH') or die('You do not have access to this file');
 
 class Register_Pages {
 	public function __construct() {
-    add_action( 'acf/init', [ $this, 'register_admin_page' ] );
+    // `wp_loaded` (not `acf/init`) so every public post type — including CPTs
+    // registered on `init` after ACF — is available when building the per-post-type
+    // Templates sub-pages. Still fires before `admin_menu`, so the pages render.
+    add_action( 'wp_loaded', [ $this, 'register_admin_page' ] );
   }
 
   /**
@@ -49,6 +52,25 @@ class Register_Pages {
           'menu_slug'     => 'templates',
         ]
       );
+
+      // One sub-page per post type so the (very large) templates field group is
+      // split across pages — each renders only its own layouts. Field names/keys
+      // are unchanged, so stored values and frontend reads are unaffected.
+      if ( class_exists( __NAMESPACE__ . '\\Register_Templates' ) ) {
+        foreach ( Register_Templates::template_post_types() as $name => $post_type ) {
+          $label = isset( $post_type->labels->singular_name )
+            ? $post_type->labels->singular_name
+            : ucfirst( $name );
+          acf_add_options_sub_page(
+            [
+              'page_title'  => sprintf( __( 'Templates: %s', 'nextpress' ), $label ),
+              'menu_title'  => sprintf( __( 'Templates: %s', 'nextpress' ), $label ),
+              'parent_slug' => 'nextpress',
+              'menu_slug'   => 'templates-' . $name,
+            ]
+          );
+        }
+      }
 
       acf_add_options_sub_page(
         [

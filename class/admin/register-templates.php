@@ -39,9 +39,10 @@ class Register_Templates {
    * scoped to the Templates options page.
    */
   public function enqueue_assets() {
-    $is_templates_page = (
-      isset( $_GET['page'] ) && $_GET['page'] === 'templates' // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-    );
+    $page = isset( $_GET['page'] ) ? $_GET['page'] : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+    // The Templates landing page ("templates") plus every per-post-type
+    // sub-page ("templates-page", "templates-post", …).
+    $is_templates_page = ( $page === 'templates' || strpos( $page, 'templates-' ) === 0 );
     if ( ! $is_templates_page ) {
       return;
     }
@@ -62,58 +63,111 @@ class Register_Templates {
   }
 
   /**
-   * Build and register ACF templates in a single hook to guarantee order.
+   * Post types that get a Templates sub-page / field group. Static so the
+   * admin-page registrar ([Register_Pages]) can register matching sub-pages
+   * without duplicating the selection logic.
+   *
+   * @return array<string,\WP_Post_Type> keyed by post-type name
+   */
+  public static function template_post_types() {
+    $exclude = [ 'attachment' ];
+    $out = [];
+    foreach ( get_post_types( [ 'public' => true ], 'objects', 'and' ) as $post_type ) {
+      if ( in_array( $post_type->name, $exclude, true ) ) {
+        continue;
+      }
+      if ( ! post_type_supports( $post_type->name, 'editor' ) ) {
+        continue;
+      }
+      $out[ $post_type->name ] = $post_type;
+    }
+    return $out;
+  }
+
+  /**
+   * Register every templates field group.
+   *
+   * Historically this was one giant group (all post types + all languages + all
+   * block layouts) rendered on a single tabbed page. That group is now split
+   * into one group per section — "Default" plus one per post type — each on its
+   * own options sub-page, so the ACF admin UI only renders a fraction of the
+   * layouts at a time (far lighter to load and to save). The field *names and
+   * keys are unchanged* (every builder is still named `templates`, so keys stay
+   * `field_templates_*`), so `get_field( …, 'option' )` reads — and the frontend
+   * contract — are byte-identical.
    */
   public function setup_templates() {
-    $this->templates = $this->build_templates();
-    if ( function_exists( 'acf_add_local_field_group' ) ) {
-      acf_add_local_field_group( $this->templates->build() );
+    if ( ! function_exists( 'acf_add_local_field_group' ) ) {
+      return;
+    }
+    foreach ( $this->get_template_groups() as $group ) {
+      acf_add_local_field_group( $group );
     }
   }
 
   /**
-   * Builds Stoutlogic templates
+   * Build (or fetch from cache) the array of ACF field-group configs.
+   *
+   * Building the groups means constructing thousands of StoutLogic field objects
+   * and running the key-namespacing transforms on every request. The result only
+   * changes when the blocks, languages or post types change, so it is memoised in
+   * a (non-autoloaded) cache keyed by a signature of exactly those inputs plus
+   * this file's mtime — any relevant change misses the cache and rebuilds.
    */
-  private function build_templates() {
-    // Create tabs and fields for each post type
-    $templates = new FieldsBuilder('templates');
+  private function get_template_groups() {
+    $theme  = get_field( 'blocks_theme', 'option' );
+    $blocks = $this->helpers->fetch_blocks_from_api( $theme, 'templates' ) ?: [];
+    $langs  = ! empty( $this->helpers->languages ) ? array_keys( $this->helpers->languages ) : [];
+    $pts    = array_keys( self::template_post_types() );
 
-    // Add a Default tab first
-    $templates
-      ->addTab('Default')
-      ->addFields( $this->create_default_template_fields() );
+    $signature = md5( serialize( [ $blocks, $langs, $pts, filemtime( __FILE__ ) ] ) );
+    $cache_key = 'tmpl_groups_' . $signature;
 
-    // Add tabs for each post type.
-    $exclude = [ 'attachment' ];
-    $post_types = get_post_types(
-      [ 'public' => true ],
-      'objects', 
-      'and'
-    );
-    foreach ( $post_types as $post_type ) {
-      if ( in_array( $post_type->name, $exclude ) ) {
-        continue;
-      }
-      $supports_editor = post_type_supports( $post_type->name, 'editor' );
-      if ( ! $supports_editor ) {
-        continue;
-      }
-      $templates
-        ->addTab( ucfirst( $post_type->name ) )
-        ->addFields( $this->create_post_type_template_fields( $post_type->name ) );
+    $cached = $this->helpers->cache_get( $cache_key, 'nextpress_templates' );
+    if ( is_array( $cached ) && ! empty( $cached ) ) {
+      return $cached;
     }
 
-    $templates
-      ->setLocation('options_page', '==', 'templates')
-      ->setGroupConfig('style', 'seamless');
+    $groups = [];
+    $groups[] = $this->build_default_group( $blocks );
+    foreach ( self::template_post_types() as $name => $post_type ) {
+      $groups[] = $this->build_post_type_group( $name, $blocks );
+    }
 
-    return $templates;
+    $this->helpers->cache_set( $cache_key, $groups, 'nextpress_templates', DAY_IN_SECONDS );
+    return $groups;
+  }
+
+  /**
+   * "Default" (global) templates group → options page `templates`.
+   */
+  private function build_default_group( $blocks ) {
+    $group = new FieldsBuilder( 'templates' );
+    $group
+      ->addFields( $this->create_default_template_fields( $blocks ) )
+      ->setLocation( 'options_page', '==', 'templates' )
+      ->setGroupConfig( 'key', 'templates_default' )
+      ->setGroupConfig( 'style', 'seamless' );
+    return $group->build();
+  }
+
+  /**
+   * Per-post-type templates group → options page `templates-{post_type}`.
+   */
+  private function build_post_type_group( $post_type, $blocks ) {
+    $group = new FieldsBuilder( 'templates' );
+    $group
+      ->addFields( $this->create_post_type_template_fields( $post_type, $blocks ) )
+      ->setLocation( 'options_page', '==', 'templates-' . $post_type )
+      ->setGroupConfig( 'key', 'templates_' . $post_type )
+      ->setGroupConfig( 'style', 'seamless' );
+    return $group->build();
   }
 
   /**
    * Create default tab template fields
    */
-  private function create_default_template_fields() {
+  private function create_default_template_fields( $blocks ) {
     $template = new FieldsBuilder("default_templates");
 
     $template
@@ -134,12 +188,12 @@ class Register_Templates {
         $language = $lang['name'];
         $template
           ->addFlexibleContent("default_before_content_{$key}", [
-            'label' => "Before Content ${language}",
+            'label' => "Before Content {$language}",
             'button_label' => 'Add Block',
             'layout' => 'block'
           ])
           ->addFlexibleContent("default_after_content_{$key}", [
-            'label' => "After Content ${language}",
+            'label' => "After Content {$language}",
             'button_label' => 'Add Block',
             'layout' => 'block'
           ]);
@@ -147,7 +201,7 @@ class Register_Templates {
     }
 
     // Add layouts to flexible content fields
-    $block_layouts = $this->create_block_layouts();
+    $block_layouts = $this->create_block_layouts( $blocks );
     foreach ( $block_layouts as $name => $layout ) {
       $template
         ->getField( "default_before_content" )
@@ -176,7 +230,7 @@ class Register_Templates {
   /**
    * Create post type template fields
    */
-  private function create_post_type_template_fields( $post_type ) {
+  private function create_post_type_template_fields( $post_type, $blocks ) {
     $categories = get_categories(
       [
         'orderby' => 'name',
@@ -220,7 +274,7 @@ class Register_Templates {
         $language = $lang['name'];
         $template
           ->addRepeater("{$post_type}_content_templates_{$key}", [
-            'label' => "Content Templates ${language}",
+            'label' => "Content Templates {$language}",
             'layout' => 'block'
           ])
           ->addSelect('category', [
@@ -248,7 +302,7 @@ class Register_Templates {
     }
 
     // Add layouts to flexible content fields
-    $block_layouts = $this->create_block_layouts();
+    $block_layouts = $this->create_block_layouts( $blocks );
     foreach ( $block_layouts as $name => $layout ) {
       $template
         ->getField("{$post_type}_content_templates")
@@ -286,11 +340,10 @@ class Register_Templates {
   }
 
   /**
-   * Creates block layouts
+   * Creates block layouts from the (already fetched) blocks list.
    */
-  private function create_block_layouts() {
-    $theme = get_field( 'blocks_theme', 'option' );
-    $blocks = $this->helpers->fetch_blocks_from_api( $theme, 'templates' ) ?: [];
+  private function create_block_layouts( $blocks ) {
+    $blocks = is_array( $blocks ) ? $blocks : [];
     $layouts = [];
 
     foreach ( $blocks as $block ) {

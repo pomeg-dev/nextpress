@@ -129,7 +129,11 @@ class Register_Blocks {
       // Check for templates admin page
       $is_np_page = (
         $pagenow === 'admin.php' &&
-        isset( $_GET['page'] ) && ( $_GET['page'] === 'templates' || $_GET['page'] === 'acf-options-settings' )
+        isset( $_GET['page'] ) && (
+          $_GET['page'] === 'templates' ||
+          strpos( $_GET['page'], 'templates-' ) === 0 ||
+          $_GET['page'] === 'acf-options-settings'
+        )
       );
 
       if ( in_array( $pagenow, $allowed_pages ) || $is_np_page ) {
