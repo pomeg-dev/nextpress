@@ -84,12 +84,12 @@ class Register_Blocks {
       return;
     }
 
-    $blocks = $this->helpers->fetch_blocks_from_api( null, 'init' );
+    $blocks = $this->helpers->get_blocks();
     if ( empty( $blocks ) ) {
       add_filter( 'use_block_editor_for_post', '__return_false' );
       add_action( 'admin_notices', function() {
         echo '<div class="notice notice-error is-dismissible"><p>';
-        _e( 'No blocks found. Please make sure the blocks api endpoint is configured', 'nextpress' );
+        _e( 'No blocks found. Push them from the frontend with `npm run blocks:push` (see Nextpress > Blocks).', 'nextpress' );
         echo '</p></div>';
       });
       add_action( 'admin_head', function() {
@@ -156,10 +156,10 @@ class Register_Blocks {
     }
 
     $themes = get_field( 'blocks_theme', 'option' );
-    $blocks = $this->helpers->fetch_blocks_from_api( $themes, 'blocks' );
+    $blocks = $this->helpers->get_blocks( $themes );
 
     if ( ! $blocks ) {
-      error_log('Nextpress: Failed to fetch blocks from API');
+      error_log('Nextpress: No block manifest available');
       return;
     }
 
@@ -204,14 +204,15 @@ class Register_Blocks {
 
       acf_add_local_field_group( $global->build() );
 
+      // Optional metadata from an object-form fields.json ({ title, description, icon, keywords, fields }).
       $block_args = [
         'name'              => $block_name,
-        'title'             => $block_title,
-        'description'       => 'A custom ' . $block['blockName'] . ' block.',
+        'title'             => $block['title'] ?? $block_title,
+        'description'       => $block['description'] ?? 'A custom ' . $block['blockName'] . ' block.',
         'render_callback'   => [ $this, 'render_nextpress_block' ],
         'category'          => $theme,
-        'icon'              => $this->get_icon( $block_name ),
-        'keywords'          => [ $block_name, 'custom' ],
+        'icon'              => $block['icon'] ?? $this->get_icon( $block_name ),
+        'keywords'          => array_merge( [ $block_name, 'custom' ], (array) ( $block['keywords'] ?? [] ) ),
         'supports'          => [
           'jsx' => true,
           'anchor' => true

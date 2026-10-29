@@ -116,7 +116,7 @@ class Register_Templates {
    */
   private function get_template_groups() {
     $theme  = get_field( 'blocks_theme', 'option' );
-    $blocks = $this->helpers->fetch_blocks_from_api( $theme, 'templates' ) ?: [];
+    $blocks = $this->helpers->get_blocks( $theme ) ?: [];
     $langs  = ! empty( $this->helpers->languages ) ? array_keys( $this->helpers->languages ) : [];
     $pts    = array_keys( self::template_post_types() );
 

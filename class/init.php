@@ -32,6 +32,7 @@ class Init {
 		new Register_Settings( $this->helpers );
 		new Register_Templates( $this->helpers );
 		new Register_Editor( $this->helpers );
+		new Register_Blocks_Admin( $this->helpers );
 		new Fix_Autoload_Transients();
 
 		// Register API routes
@@ -41,6 +42,7 @@ class Init {
 		new API_Menus( $this->helpers );
 		new API_Theme( $this->helpers );
 		new API_Editor( $this->helpers );
+		new API_Blocks( $this->helpers );
 
 		// Add user flows. Disabled by default (next-auth is too large for most
 		// projects); opt in per-project from the active theme, e.g. functions.php:

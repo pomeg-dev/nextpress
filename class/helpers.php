@@ -13,7 +13,7 @@ class Helpers {
   /**
    * API URLs
    */
-  public $dev_mode = true;
+  public $dev_mode = false;
   public $frontend_url = 'http://localhost:3000';
   public $docker_url = 'http://host.docker.internal:3000';
   public $api_endpoint = '/api';
@@ -27,6 +27,11 @@ class Helpers {
   public $cache;
 
   /**
+   * Block manifest store, see blocks_manifest().
+   */
+  private $blocks_manifest;
+
+  /**
    * Polylang
    */
   public $languages = [];
@@ -34,6 +39,8 @@ class Helpers {
 
   public function __construct() {
     $this->cache = new Cache();
+    // SSL verification is only relaxed for local (self-signed / Docker) frontends.
+    $this->dev_mode = strpos( site_url(), 'localhost' ) !== false;
     // Setup languages using Polylang.
     add_action( 'init', [ $this, 'init_polylang' ] );
 
@@ -188,7 +195,24 @@ class Helpers {
   }
 
   /**
-   * Fetch all themes/blocks from nextjs api
+   * Block definitions, from the stored manifest (pushed via blocks:push).
+   * Same return shapes as fetch_blocks_from_api(): { theme: Block[] } when no
+   * theme is given, otherwise a flat Block[].
+   */
+  public function get_blocks( $theme = null ) {
+    return $this->blocks_manifest()->get_blocks( $theme );
+  }
+
+  public function blocks_manifest() {
+    if ( ! $this->blocks_manifest ) {
+      $this->blocks_manifest = new Blocks_Manifest( $this );
+    }
+    return $this->blocks_manifest;
+  }
+
+  /**
+   * Fetch all themes/blocks from nextjs api. Only used as the legacy fallback
+   * by Blocks_Manifest::pull() — call get_blocks() instead.
    */
   public function fetch_blocks_from_api( $theme = null, $source = '' ) {
     $cache_parts = ['next_blocks'];
