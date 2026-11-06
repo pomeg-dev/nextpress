@@ -134,7 +134,7 @@ class Register_Editor {
       return [
         'state'   => 'secret_mismatch',
         'message' => 'Preview secret mismatch',
-        'detail'  => 'The frontend is reachable but rejected the signed token. Make sure NEXTPRESS_PREVIEW_SECRET is identical in wp-config.php and the Next .env.',
+        'detail'  => 'The frontend is reachable but rejected the signed token. Make sure NEXTPRESS_CLIENT_SECRET (or the legacy NEXTPRESS_PREVIEW_SECRET) is identical in wp-config.php and the Next .env.',
       ];
     }
 
@@ -179,7 +179,7 @@ class Register_Editor {
     if ( $this->helpers->preview_secret_is_default() ) {
       $html .= '<div style="border:1px solid #f0d488;background:#fff8e1;color:#8a5b00;'
         . 'border-radius:8px;padding:10px 14px;margin-top:10px;font-size:13px;line-height:1.5;max-width:640px;">'
-        . '&#9888; Using the default preview secret. Set a unique <code>NEXTPRESS_PREVIEW_SECRET</code> '
+        . '&#9888; Using the default preview secret. Set a unique <code>NEXTPRESS_CLIENT_SECRET</code> '
         . '(wp-config.php + Next .env) before using this in production.'
         . '</div>';
     }

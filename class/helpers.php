@@ -149,9 +149,22 @@ class Helpers {
   }
 
   /**
-   * Shared secret for the live-preview token (wp-config NEXTPRESS_PREVIEW_SECRET,
-   * mirrored in the Next .env). The fallback keeps a fresh install working out of
-   * the box — override it in production.
+   * Single WP<->frontend shared secret (wp-config NEXTPRESS_CLIENT_SECRET,
+   * mirrored in the Next .env). Per-purpose subkeys are derived from it, so
+   * there is no shipped default: unset means "use the legacy secrets".
+   */
+  public function client_secret() {
+    if ( defined( 'NEXTPRESS_CLIENT_SECRET' ) && NEXTPRESS_CLIENT_SECRET ) {
+      return (string) NEXTPRESS_CLIENT_SECRET;
+    }
+    return '';
+  }
+
+  /**
+   * Legacy shared secret for the live-preview token (wp-config
+   * NEXTPRESS_PREVIEW_SECRET). Only used when NEXTPRESS_CLIENT_SECRET is unset.
+   * The fallback keeps a fresh install working out of the box — override it in
+   * production.
    */
   public function preview_secret() {
     if ( defined( 'NEXTPRESS_PREVIEW_SECRET' ) && NEXTPRESS_PREVIEW_SECRET ) {
@@ -162,7 +175,39 @@ class Helpers {
 
   /** True while still using the shipped default secret (a prod security nudge). */
   public function preview_secret_is_default() {
-    return $this->preview_secret() === 'c1492212c32302f323046d9bfb9496980b175da70b0f9004154272e8cbc273be';
+    return $this->client_secret() === ''
+      && $this->preview_secret() === 'c1492212c32302f323046d9bfb9496980b175da70b0f9004154272e8cbc273be';
+  }
+
+  /**
+   * HMAC key for signing preview tokens (raw bytes). Derived from the client
+   * secret as HMAC-SHA256(secret, "nextpress:preview:v1"); the frontend derives
+   * the same key. Falls back to the legacy raw preview secret.
+   */
+  private function preview_signing_key() {
+    $secret = $this->client_secret();
+    if ( $secret !== '' ) {
+      return hash_hmac( 'sha256', 'nextpress:preview:v1', $secret, true );
+    }
+    return $this->preview_secret();
+  }
+
+  /**
+   * Headers authenticating a revalidate request to the frontend. With the
+   * client secret: lowercase hex HMAC-SHA256(secret, "nextpress:revalidate:v1").
+   * Otherwise the legacy NEXTPRESS_REVALIDATE_SECRET constant, sent verbatim, if
+   * defined. Empty when neither is configured.
+   */
+  private function revalidate_headers() {
+    $secret = $this->client_secret();
+    if ( $secret !== '' ) {
+      $token = hash_hmac( 'sha256', 'nextpress:revalidate:v1', $secret );
+    } elseif ( defined( 'NEXTPRESS_REVALIDATE_SECRET' ) && NEXTPRESS_REVALIDATE_SECRET ) {
+      $token = (string) NEXTPRESS_REVALIDATE_SECRET;
+    } else {
+      return [];
+    }
+    return [ 'x-nextpress-revalidate-secret' => $token ];
   }
 
   private function preview_base64url( $bin ) {
@@ -183,7 +228,7 @@ class Helpers {
       'exp'  => time() + 2 * HOUR_IN_SECONDS,
     ];
     $payload_b64 = $this->preview_base64url( wp_json_encode( $payload ) );
-    $sig         = hash_hmac( 'sha256', $payload_b64, $this->preview_secret(), true );
+    $sig         = hash_hmac( 'sha256', $payload_b64, $this->preview_signing_key(), true );
     return $payload_b64 . '.' . $this->preview_base64url( $sig );
   }
 
@@ -341,7 +386,7 @@ class Helpers {
    */
   public function revalidate_fetch_route( $tag ) {
     $request_url = $this->get_api_url() . "/revalidate?tag=" . $tag;
-    return wp_remote_get( $request_url, [ 'timeout' => 1 ] );
+    return wp_remote_get( $request_url, [ 'timeout' => 1, 'headers' => $this->revalidate_headers() ] );
   }
 
   /**
@@ -349,7 +394,7 @@ class Helpers {
    */
   public function revalidate_specific_path( $path ) {
     $request_url = $this->get_api_url() . "/revalidate?path=" . urlencode( $path );
-    return wp_remote_get( $request_url, [ 'timeout' => 1 ] );
+    return wp_remote_get( $request_url, [ 'timeout' => 1, 'headers' => $this->revalidate_headers() ] );
   }
 
   /**

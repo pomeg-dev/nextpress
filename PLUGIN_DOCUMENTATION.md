@@ -544,7 +544,7 @@ Uses `JWT_AUTH_SECRET_KEY` constant. Sets CORS headers for cross-origin auth.
 
 ### Revalidation Mechanism
 
-Fires `wp_remote_get()` to `{frontend_url}/api/revalidate?tag={tag}` or `?path={path}` with 1-second timeout (fire-and-forget).
+Fires `wp_remote_get()` to `{frontend_url}/api/revalidate?tag={tag}` or `?path={path}` with 1-second timeout (fire-and-forget). Sends the `x-nextpress-revalidate-secret` header when `NEXTPRESS_CLIENT_SECRET` (derived) or legacy `NEXTPRESS_REVALIDATE_SECRET` is defined.
 
 ---
 
@@ -656,7 +656,9 @@ Register_Blocks::register_nextpress_blocks()
 |---|---|---|
 | `NEXTPRESS_PATH` | Plugin directory path (no trailing slash) | `nextpress.php` (defined) |
 | `NEXTPRESS_URI` | Plugin URL | `nextpress.php` (defined) |
-| `NEXTPRESS_PREVIEW_SECRET` | Shared HMAC secret for live-preview tokens; mirror in the Next.js `.env`. Falls back to a shipped default — override in production | user-defined (wp-config.php) |
+| `NEXTPRESS_CLIENT_SECRET` | Single WP↔frontend shared secret; mirror in the Next.js `.env`. Subkeys are derived with HMAC-SHA256 (key = UTF-8 secret): preview signing key = `HMAC("nextpress:preview:v1")` (raw bytes), revalidate header `x-nextpress-revalidate-secret` = hex `HMAC("nextpress:revalidate:v1")`. No default | user-defined (wp-config.php) |
+| `NEXTPRESS_PREVIEW_SECRET` | Legacy: raw HMAC key for live-preview tokens, used only when `NEXTPRESS_CLIENT_SECRET` is unset. Falls back to a shipped default — override in production | user-defined (wp-config.php) |
+| `NEXTPRESS_REVALIDATE_SECRET` | Legacy: sent verbatim as `x-nextpress-revalidate-secret` when `NEXTPRESS_CLIENT_SECRET` is unset | user-defined (wp-config.php) |
 | `JWT_AUTH_SECRET_KEY` | Signing key for the opt-in user-flow JWTs | user-defined (wp-config.php) |
 
 ### WP Options Used
